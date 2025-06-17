@@ -1,0 +1,487 @@
+<div class="container-fluid mt-4">
+  <h1>Pokémon VGC Stats</h1>
+  <div class="row mb-3">
+    <div class="col-md-3">
+      <label for="monthSelect" class="form-label">Select Month</label>
+      <select id="monthSelect" class="form-select"></select>
+    </div>
+    <div class="col-md-3">
+      <label for="formatSelect" class="form-label">Select VGC BO3 Format</label>
+      <select id="formatSelect" class="form-select"></select>
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <button id="loadDataBtn" class="btn btn-primary w-100" disabled>Load Data</button>
+    </div>
+  </div>
+  <!-- Usage Charts: Full width, hidden by default -->
+  <div class="row">
+    <div class="col-12">
+      <div id="usageChartsCardWrapper" style="display: none;">
+        <div class="card mb-3">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Usage Charts</span>
+            <button class="btn btn-link p-0" id="usageChartsToggleBtn" type="button" data-bs-toggle="collapse" data-bs-target="#usageChartsCollapse" aria-expanded="true" aria-controls="usageChartsCollapse">
+              <span class="chevron-icon" style="display: inline-block; transition: transform 0.2s;"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg></span>
+            </button>
+          </div>
+          <div class="collapse" id="usageChartsCollapse">
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6">
+                  <canvas id="usageChart" height="100"></canvas>
+                </div>
+                <div class="col-md-6" id="restrictedChartDiv"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <!-- Sidebar: Pokemon List/Search -->
+    <div class="col-md-4" style="max-width: 400px; min-width: 300px;">
+      <div id="sidebarPanel" style="display: none;">
+        <h5>All Pokémon</h5>
+        <input id="pokemonSearch" type="text" class="form-control mb-2" placeholder="Search Pokémon...">
+        <ul id="pokemonList" class="list-group mb-3"></ul>
+      </div>
+    </div>
+    <!-- Main Content -->
+    <div class="col-md-8">
+      <div id="pokemonDetails" class="mb-4"></div>
+      <div id="statsDisplay" class="mt-4">
+        <!-- Additional stats and charts will be rendered here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  let globalPokemonData = {};
+  let usageChart;
+  let speedChart;
+  let allPokemonNames = [];
+  let pokedex = [];
+  let restrictedList = [];
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const monthSelect = document.getElementById('monthSelect');
+    const formatSelect = document.getElementById('formatSelect');
+    const loadDataBtn = document.getElementById('loadDataBtn');
+    const usageChartCtx = document.getElementById('usageChart').getContext('2d');
+    const pokemonList = document.getElementById('pokemonList');
+    const pokemonDetails = document.getElementById('pokemonDetails');
+    const sidebarPanel = document.getElementById('sidebarPanel');
+    const pokemonSearch = document.getElementById('pokemonSearch');
+    const usageChartsCollapse = document.getElementById('usageChartsCollapse');
+    const chevronIcon = document.querySelector('#usageChartsToggleBtn .chevron-icon');
+
+    // Fetch months
+    fetch('/months')
+      .then(res => res.json())
+      .then(months => {
+        months.reverse().forEach(month => {
+          const opt = document.createElement('option');
+          opt.value = month;
+          opt.textContent = month;
+          monthSelect.appendChild(opt);
+        });
+        if (months.length > 0) {
+          monthSelect.value = months[0];
+          fetchFormats(months[0]);
+        }
+      });
+
+    monthSelect.addEventListener('change', function() {
+      fetchFormats(this.value);
+      updateLoadButtonState();
+    });
+
+    formatSelect.addEventListener('change', function() {
+      updateLoadButtonState();
+    });
+
+    loadDataBtn.addEventListener('click', function() {
+      fetchAndRenderData();
+    });
+
+    if (pokemonSearch) {
+      pokemonSearch.addEventListener('input', function() {
+        filterPokemonList(this.value);
+      });
+    }
+
+    function fetchFormats(month) {
+      formatSelect.innerHTML = '';
+      fetch(`/formats?month=${month}`)
+        .then(res => res.json())
+        .then(formats => {
+          formats.forEach(format => {
+            const opt = document.createElement('option');
+            opt.value = format;
+            opt.textContent = format;
+            formatSelect.appendChild(opt);
+          });
+          if (formats.length > 0) {
+            formatSelect.value = formats[0];
+          }
+          updateLoadButtonState();
+        });
+    }
+
+    function updateLoadButtonState() {
+      loadDataBtn.disabled = !(monthSelect.value && formatSelect.value);
+    }
+
+    function fetchAndRenderData() {
+      const month = monthSelect.value;
+      const format = formatSelect.value;
+      if (!month || !format) return;
+      fetch(`/data?month=${month}&format=${format}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            alert(data.error);
+            return;
+          }
+          globalPokemonData = data.data;
+          renderUsageCharts(globalPokemonData);
+          renderPokemonList(globalPokemonData);
+          pokemonDetails.innerHTML = '';
+          // Show sidebar and clear search
+          sidebarPanel.style.display = '';
+          pokemonSearch.value = '';
+          // Show the usage charts card and expand the collapse
+          document.getElementById('usageChartsCardWrapper').style.display = '';
+          let collapse = bootstrap.Collapse.getOrCreateInstance(document.getElementById('usageChartsCollapse'));
+          collapse.show();
+        });
+    }
+
+    function renderUsageCharts(pokemonData) {
+      // Split into restricted and non-restricted
+      const entries = Object.entries(pokemonData).filter(([_, val]) => val.usage !== undefined);
+      const restrictedSet = new Set(restrictedList);
+      const regular = entries.filter(([name]) => !restrictedSet.has(name));
+      const restricted = entries.filter(([name]) => restrictedSet.has(name));
+      // Top 12 regular
+      const topRegular = regular.sort((a, b) => b[1].usage - a[1].usage).slice(0, 12);
+      // Top 8 restricted
+      const topRestricted = restricted.sort((a, b) => b[1].usage - a[1].usage).slice(0, 8);
+
+      // Render regular chart
+      if (usageChart) usageChart.destroy();
+      usageChart = new Chart(usageChartCtx, {
+        type: 'bar',
+        data: {
+          labels: topRegular.map(([name]) => name),
+          datasets: [{
+            label: 'Usage %',
+            data: topRegular.map(([_, val]) => (val.usage * 100).toFixed(2)),
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Top 12 Pokémon Usage % (Non-Restricted)'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            }
+          }
+        }
+      });
+
+      // Render restricted chart
+      const restrictedChartDiv = document.getElementById('restrictedChartDiv');
+      restrictedChartDiv.innerHTML = '<canvas id="restrictedChart" height="100"></canvas>';
+      const restrictedChartCtx = document.getElementById('restrictedChart').getContext('2d');
+      if (window.restrictedChart && typeof window.restrictedChart.destroy === 'function') {
+        window.restrictedChart.destroy();
+      }
+      window.restrictedChart = new Chart(restrictedChartCtx, {
+        type: 'bar',
+        data: {
+          labels: topRestricted.map(([name]) => name),
+          datasets: [{
+            label: 'Usage %',
+            data: topRestricted.map(([_, val]) => (val.usage * 100).toFixed(2)),
+            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Top 8 Restricted Pokémon Usage %'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            }
+          }
+        }
+      });
+    }
+
+    function renderPokemonList(pokemonData) {
+      pokemonList.innerHTML = '';
+      allPokemonNames = Object.keys(pokemonData).sort();
+      allPokemonNames.forEach(name => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-action';
+        li.textContent = name;
+        li.style.cursor = 'pointer';
+        li.addEventListener('click', function() {
+          renderPokemonDetails(name, pokemonData[name]);
+        });
+        pokemonList.appendChild(li);
+      });
+    }
+
+    function filterPokemonList(query) {
+      const filter = query.trim().toLowerCase();
+      Array.from(pokemonList.children).forEach(li => {
+        if (li.textContent.toLowerCase().includes(filter)) {
+          li.style.display = '';
+        } else {
+          li.style.display = 'none';
+        }
+      });
+    }
+
+    function renderPokemonDetails(name, data) {
+      if (!data) return;
+      let html = `<h3>${name}</h3>`;
+      const total = data["Raw count"] || 1;
+      // Items
+      if (data.Items) {
+        html += '<h5>Items</h5>';
+        html += '<table class="table table-sm table-striped"><thead><tr><th>Item</th><th>%</th></tr></thead><tbody>';
+        const items = Object.entries(data.Items).sort((a, b) => b[1] - a[1]);
+        const totalItems = Object.values(data.Items).reduce((a, b) => a + b, 0) || 1;
+        items.slice(0, 10).forEach(([item, count]) => {
+          const pct = ((count / totalItems) * 100).toFixed(2);
+          html += `<tr><td>${item}</td><td>${pct}%</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      // Moves
+      if (data.Moves) {
+        html += '<h5>Moves</h5>';
+        html += '<table class="table table-sm table-striped"><thead><tr><th>Move</th><th>%</th></tr></thead><tbody>';
+        const moves = Object.entries(data.Moves).sort((a, b) => b[1] - a[1]);
+        const totalMoves = (Object.values(data.Moves).reduce((a, b) => a + b, 0) || 1) / 4;
+        moves.slice(0, 10).forEach(([move, count]) => {
+          const pct = ((count / totalMoves) * 100).toFixed(2);
+          html += `<tr><td>${move}</td><td>${pct}%</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      // Abilities
+      if (data.Abilities) {
+        html += '<h5>Abilities</h5>';
+        html += '<table class="table table-sm table-striped"><thead><tr><th>Ability</th><th>%</th></tr></thead><tbody>';
+        const abilities = Object.entries(data.Abilities).sort((a, b) => b[1] - a[1]);
+        const totalAbilities = Object.values(data.Abilities).reduce((a, b) => a + b, 0) || 1;
+        abilities.forEach(([ability, count]) => {
+          const pct = ((count / totalAbilities) * 100).toFixed(2);
+          html += `<tr><td>${ability}</td><td>${pct}%</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      // Natures Table
+      if (data.Spreads) {
+        // Aggregate by nature
+        const natureTotals = {};
+        const natureItems = {};
+        const natureSpreads = {};
+        Object.entries(data.Spreads).forEach(([spread, count]) => {
+          const parts = spread.split(":");
+          const nature = parts[0];
+          natureTotals[nature] = (natureTotals[nature] || 0) + count;
+          // Track spreads for this nature
+          if (!natureSpreads[nature]) natureSpreads[nature] = {};
+          natureSpreads[nature][spread] = (natureSpreads[nature][spread] || 0) + count;
+        });
+        // Aggregate items by nature
+        if (data.ItemsByNature) {
+          Object.entries(data.ItemsByNature).forEach(([nature, items]) => {
+            natureItems[nature] = items;
+          });
+        } else {
+          // Fallback: estimate items by nature using spreads and items
+          Object.entries(data.Spreads).forEach(([spread, count]) => {
+            const parts = spread.split(":");
+            const nature = parts[0];
+            // We cant directly map items to natures without more granular data
+          });
+        }
+        html += '<h5>Natures</h5>';
+        html += '<table class="table table-sm table-striped"><thead><tr><th>Nature</th><th>Usage %</th><th>Common Spreads</th></tr></thead><tbody>';
+        const totalSpreads = Object.values(data.Spreads).reduce((a, b) => a + b, 0);
+        Object.entries(natureTotals).sort((a, b) => b[1] - a[1]).forEach(([nature, count]) => {
+          const pct = ((count / totalSpreads) * 100).toFixed(2);
+          if (isNaN(pct) || Number(pct) === 0) return;
+          // Common spreads for this nature
+          const spreadsForNature = Object.entries(natureSpreads[nature] || {}).sort((a, b) => b[1] - a[1]);
+          const commonSpreads = spreadsForNature.slice(0, 5).map(([spread, spreadCount]) => {
+            const evs = spread.split(":")[1];
+            const spreadPct = ((spreadCount / count) * 100).toFixed(2);
+            if (isNaN(spreadPct) || Number(spreadPct) === 0) return null;
+            return `${evs} (${spreadPct}%)`;
+          }).filter(Boolean).join('<br>');
+          html += `<tr><td>${nature}</td><td>${pct}%</td><td>${commonSpreads}</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      // Speed Chart
+      if (data.Spreads) {
+        html += '<h5>Speed Distribution</h5><canvas id="speedChart" height="80"></canvas>';
+        setTimeout(() => renderSpeedChart(data.Spreads, name), 0);
+      }
+      pokemonDetails.innerHTML = html;
+    }
+
+    function normalizeName(name) {
+      return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function renderSpeedChart(spreads, pokeName) {
+      if (speedChart) speedChart.destroy();
+      // Find the base speed from pokedex
+      let baseSpeed = null;
+      if (pokedex && typeof pokedex === 'object') {
+        const normName = normalizeName(pokeName);
+        if (
+          pokedex[normName] &&
+          pokedex[normName].baseStats &&
+          typeof pokedex[normName].baseStats.spe === 'number'
+        ) {
+          baseSpeed = pokedex[normName].baseStats.spe;
+        }
+      }
+      if (baseSpeed === null) {
+        // fallback: dont render chart if base speed not found
+        console.log(`No base speed found for ${pokeName}`);
+        return;
+      }
+      // Nature multipliers
+      const speedUp = ["Timid", "Hasty", "Jolly", "Naive"];
+      const speedDown = ["Brave", "Relaxed", "Quiet", "Sassy"];
+      const speedCounts = {};
+      Object.entries(spreads).forEach(([spread, count]) => {
+        // Spread format: Nature:HP/Atk/Def/SpA/SpD/Spe
+        const parts = spread.split(':');
+        if (parts.length === 2) {
+          const nature = parts[0];
+          const stats = parts[1].split('/').map(x => parseInt(x, 10));
+          const speedEV = stats[5];
+          let natureMultiplier = 1.0;
+          if (speedUp.includes(nature)) natureMultiplier = 1.1;
+          else if (speedDown.includes(nature)) natureMultiplier = 0.9;
+          // IV logic
+          let IV = 31;
+          if (speedDown.includes(nature) && speedEV === 0) IV = 0;
+          // Speed calculation
+          const speed = Math.floor(
+            (Math.floor(((2 * baseSpeed + IV + Math.floor(speedEV / 4)) * 50) / 100) + 5) * natureMultiplier
+          );
+          speedCounts[speed] = (speedCounts[speed] || 0) + count;
+        }
+      });
+      const sortedSpeeds = Object.keys(speedCounts).map(Number).sort((a, b) => a - b);
+      // Fill in missing speeds for a continuous x-axis
+      if (sortedSpeeds.length > 0) {
+        const minSpeed = sortedSpeeds[0];
+        const maxSpeed = sortedSpeeds[sortedSpeeds.length - 1];
+        const allSpeeds = [];
+        const total = Object.values(speedCounts).reduce((a, b) => a + b, 0);
+        const allCounts = [];
+        for (let s = minSpeed; s <= maxSpeed; s++) {
+          const pct = total > 0 ? ((speedCounts[s] || 0) / total) * 100 : 0;
+          allSpeeds.push(s);
+          allCounts.push(pct.toFixed(2));
+        }
+        const ctx = document.getElementById('speedChart').getContext('2d');
+        speedChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: allSpeeds,
+            datasets: [{
+              label: 'Usage %',
+              data: allCounts,
+              backgroundColor: 'rgba(255, 99, 132, 0.5)',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              title: {
+                display: true,
+                text: 'Speed Distribution'
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: 'Usage %' }
+              },
+              x: {
+                title: { display: true, text: 'Speed' },
+                min: minSpeed,
+                max: maxSpeed
+              }
+            }
+          }
+        });
+      }
+    }
+
+    // Fetch Pokedex.json on page load
+    fetch('/Pokedex.json')
+      .then(res => res.json())
+      .then(data => { pokedex = data; });
+
+    // Fetch restricted_pokemon.json on page load
+    fetch('/restricted_pokemon.json')
+      .then(res => res.json())
+      .then(data => { restrictedList = data; });
+
+    if (usageChartsCollapse && chevronIcon) {
+      usageChartsCollapse.addEventListener('show.bs.collapse', function() {
+        chevronIcon.style.transform = 'rotate(0deg)';
+      });
+      usageChartsCollapse.addEventListener('hide.bs.collapse', function() {
+        chevronIcon.style.transform = 'rotate(-90deg)';
+      });
+      // Set initial state
+      if (usageChartsCollapse.classList.contains('show')) {
+        chevronIcon.style.transform = 'rotate(0deg)';
+      } else {
+        chevronIcon.style.transform = 'rotate(-90deg)';
+      }
+    }
+  });
+</script>
