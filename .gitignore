@@ -4,11 +4,14 @@
 # belong in git's global ignore instead:
 # `$XDG_CONFIG_HOME/git/ignore` or `~/.config/git/ignore`
 
+# See https://github.com/github/gitignore/blob/main/Rails.gitignore
+
 # Ignore bundler config.
 /.bundle
 
-# Ignore all environment files.
-/.env*
+# Ignore the default SQLite database.
+/db/*.sqlite3
+/db/*.sqlite3-journal
 
 # Ignore all logfiles and tempfiles.
 /log/*
@@ -16,19 +19,46 @@
 !/log/.keep
 !/tmp/.keep
 
-# Ignore pidfiles, but keep the directory.
-/tmp/pids/*
-!/tmp/pids/
-!/tmp/pids/.keep
-
-# Ignore storage (uploaded files in development and any SQLite databases).
+# Ignore uploaded files in development.
 /storage/*
 !/storage/.keep
-/tmp/storage/*
-!/tmp/storage/
-!/tmp/storage/.keep
-
-/public/assets
 
 # Ignore master key for decrypting credentials and more.
 /config/master.key
+/config/credentials/*.key
+
+# Ignore node modules and yarn files
+/node_modules
+/yarn-error.log
+
+# Ignore byebug command history file.
+.byebug_history
+
+# Ignore Mac and Windows file system files
+.DS_Store
+Thumbs.db
+
+# Ignore coverage reports
+/coverage/
+
+# Ignore dotenv environment variables file
+.env
+
+# Ignore public assets that are precompiled
+/public/assets
+/public/packs
+/public/packs-test
+/public/packs-dev
+/public/webpack
+/public/webpack-test
+/public/webpack-dev
+
+# Ignore other temp files
+*.swp
+*~
+.project
+.idea/
+.secret
+
+# Ignore VSCode settings
+.vscode/
