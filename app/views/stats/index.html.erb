@@ -63,7 +63,7 @@
             <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link" id="speed-tab" data-bs-toggle="tab" data-bs-target="#speed" type="button" role="tab">Speed</button>
+            <button class="nav-link" id="statdist-tab" data-bs-toggle="tab" data-bs-target="#statdist" type="button" role="tab">Stat Distributions</button>
           </li>
         </ul>
         <div class="tab-content" id="pokeTabsContent">
@@ -76,9 +76,28 @@
             <div id="abilities-grid"></div>
             <h5 class="mt-3">Natures</h5>
             <div id="natures-grid"></div>
-            
           </div>
-          <div class="tab-pane fade" id="speed" role="tabpanel">
+          <div class="tab-pane fade" id="statdist" role="tabpanel">
+            <div id="hp-chart-container" class="mt-3">
+              <h5>HP Distribution</h5>
+              <canvas id="hpChart" height="80"></canvas>
+            </div>
+            <div id="attack-chart-container" class="mt-3">
+              <h5>Attack Distribution</h5>
+              <canvas id="attackChart" height="80"></canvas>
+            </div>
+            <div id="defense-chart-container" class="mt-3">
+              <h5>Defense Distribution</h5>
+              <canvas id="defenseChart" height="80"></canvas>
+            </div>
+            <div id="spatk-chart-container" class="mt-3">
+              <h5>Special Attack Distribution</h5>
+              <canvas id="spatkChart" height="80"></canvas>
+            </div>
+            <div id="spdef-chart-container" class="mt-3">
+              <h5>Special Defense Distribution</h5>
+              <canvas id="spdefChart" height="80"></canvas>
+            </div>
             <div id="speed-chart-container" class="mt-3">
               <h5>Speed Distribution</h5>
               <canvas id="speedChart" height="80"></canvas>
@@ -123,6 +142,10 @@
     const $pokemonDetailsLoading = $('#pokemonDetailsLoading');
     const $pokemonDetailsError = $('#pokemonDetailsError');
     const $speedChartContainer = $('#speed-chart-container');
+    const $itemsGrid = $('#items-grid');
+    const $movesGrid = $('#moves-grid');
+    const $abilitiesGrid = $('#abilities-grid');
+    const $naturesGrid = $('#natures-grid');
 
     // Fetch months
     $.getJSON('/months', function(months) {
@@ -296,7 +319,7 @@
       entries.forEach(([name, val]) => {
         const isRestricted = restrictedList.includes(name);
         const $li = $('<li>').addClass('list-group-item list-group-item-action d-flex justify-content-between align-items-center');
-        const $nameSpan = $('<span>').text(name);
+        const $nameSpan = $('<span>').addClass('pokemon-name').text(name);
         const $badge = $('<span>')
           .addClass('badge rounded-pill')
           .addClass(isRestricted ? '' : 'bg-primary')
@@ -456,12 +479,208 @@
       } catch (e) {
         speed_distribution = [];
       }
+      // Attack distribution
+      let attack_distribution = [];
+      try {
+        let base_atk = null;
+        if (pokedex && typeof pokedex === 'object') {
+          const pokeEntry = pokedex[name] || pokedex[name.toLowerCase().replace(/[^a-z0-9]/g, '')];
+          if (pokeEntry && pokeEntry.baseStats && typeof pokeEntry.baseStats.atk === 'number') {
+            base_atk = pokeEntry.baseStats.atk;
+          }
+        }
+        if (base_atk && pokeData["Spreads"]) {
+          const atkUp = ["Lonely", "Adamant", "Naughty", "Brave"];
+          const atkDown = ["Bold", "Modest", "Calm", "Timid"];
+          const atkCounts = {};
+          Object.entries(pokeData["Spreads"]).forEach(([spread, count]) => {
+            const parts = spread.split(":");
+            if (parts.length === 2) {
+              const nature = parts[0];
+              const stats = parts[1].split("/").map(x => parseInt(x, 10));
+              const atkEV = stats[1];
+              let natureMultiplier = 1.0;
+              if (atkUp.includes(nature)) natureMultiplier = 1.1;
+              else if (atkDown.includes(nature)) natureMultiplier = 0.9;
+              let IV = 31;
+              if (atkDown.includes(nature) && atkEV === 0) IV = 0;
+              const atk = Math.floor(
+                (Math.floor(((2 * base_atk + IV + Math.floor(atkEV / 4)) * 50) / 100) + 5) * natureMultiplier
+              );
+              atkCounts[atk] = (atkCounts[atk] || 0) + count;
+            }
+          });
+          const totalAtk = Object.values(atkCounts).reduce((a, b) => a + b, 0);
+          attack_distribution = Object.keys(atkCounts).sort((a, b) => a - b).map(atk => {
+            const pct = totalAtk > 0 ? ((atkCounts[atk] / totalAtk) * 100).toFixed(2) : 0;
+            return pct > 0 ? [atk, `${pct}%`] : null;
+          }).filter(Boolean);
+        }
+      } catch (e) {
+        attack_distribution = [];
+      }
+      // Defense distribution
+      let defense_distribution = [];
+      try {
+        let base_def = null;
+        if (pokedex && typeof pokedex === 'object') {
+          const pokeEntry = pokedex[name] || pokedex[name.toLowerCase().replace(/[^a-z0-9]/g, '')];
+          if (pokeEntry && pokeEntry.baseStats && typeof pokeEntry.baseStats.def === 'number') {
+            base_def = pokeEntry.baseStats.def;
+          }
+        }
+        if (base_def && pokeData["Spreads"]) {
+          const defUp = ["Bold", "Impish", "Lax", "Relaxed"];
+          const defDown = ["Lonely", "Mild", "Gentle", "Hasty"];
+          const defCounts = {};
+          Object.entries(pokeData["Spreads"]).forEach(([spread, count]) => {
+            const parts = spread.split(":");
+            if (parts.length === 2) {
+              const nature = parts[0];
+              const stats = parts[1].split("/").map(x => parseInt(x, 10));
+              const defEV = stats[2];
+              let natureMultiplier = 1.0;
+              if (defUp.includes(nature)) natureMultiplier = 1.1;
+              else if (defDown.includes(nature)) natureMultiplier = 0.9;
+              let IV = 31;
+              if (defDown.includes(nature) && defEV === 0) IV = 0;
+              const defense = Math.floor(
+                (Math.floor(((2 * base_def + IV + Math.floor(defEV / 4)) * 50) / 100) + 5) * natureMultiplier
+              );
+              defCounts[defense] = (defCounts[defense] || 0) + count;
+            }
+          });
+          const totalDef = Object.values(defCounts).reduce((a, b) => a + b, 0);
+          defense_distribution = Object.keys(defCounts).sort((a, b) => a - b).map(def => {
+            const pct = totalDef > 0 ? ((defCounts[def] / totalDef) * 100).toFixed(2) : 0;
+            return pct > 0 ? [def, `${pct}%`] : null;
+          }).filter(Boolean);
+        }
+      } catch (e) {
+        defense_distribution = [];
+      }
+      // Sp. Atk distribution
+      let sp_atk_distribution = [];
+      try {
+        let base_spa = null;
+        if (pokedex && typeof pokedex === 'object') {
+          const pokeEntry = pokedex[name] || pokedex[name.toLowerCase().replace(/[^a-z0-9]/g, '')];
+          if (pokeEntry && pokeEntry.baseStats && typeof pokeEntry.baseStats.spa === 'number') {
+            base_spa = pokeEntry.baseStats.spa;
+          }
+        }
+        if (base_spa && pokeData["Spreads"]) {
+          const spaUp = ["Modest", "Mild", "Rash", "Quiet"];
+          const spaDown = ["Adamant", "Impish", "Careful", "Jolly"];
+          const spaCounts = {};
+          Object.entries(pokeData["Spreads"]).forEach(([spread, count]) => {
+            const parts = spread.split(":");
+            if (parts.length === 2) {
+              const nature = parts[0];
+              const stats = parts[1].split("/").map(x => parseInt(x, 10));
+              const spaEV = stats[3];
+              let natureMultiplier = 1.0;
+              if (spaUp.includes(nature)) natureMultiplier = 1.1;
+              else if (spaDown.includes(nature)) natureMultiplier = 0.9;
+              let IV = 31;
+              if (spaDown.includes(nature) && spaEV === 0) IV = 0;
+              const spa = Math.floor(
+                (Math.floor(((2 * base_spa + IV + Math.floor(spaEV / 4)) * 50) / 100) + 5) * natureMultiplier
+              );
+              spaCounts[spa] = (spaCounts[spa] || 0) + count;
+            }
+          });
+          const totalSpa = Object.values(spaCounts).reduce((a, b) => a + b, 0);
+          sp_atk_distribution = Object.keys(spaCounts).sort((a, b) => a - b).map(spa => {
+            const pct = totalSpa > 0 ? ((spaCounts[spa] / totalSpa) * 100).toFixed(2) : 0;
+            return pct > 0 ? [spa, `${pct}%`] : null;
+          }).filter(Boolean);
+        }
+      } catch (e) {
+        sp_atk_distribution = [];
+      }
+      // Sp. Def distribution
+      let sp_def_distribution = [];
+      try {
+        let base_spd = null;
+        if (pokedex && typeof pokedex === 'object') {
+          const pokeEntry = pokedex[name] || pokedex[name.toLowerCase().replace(/[^a-z0-9]/g, '')];
+          if (pokeEntry && pokeEntry.baseStats && typeof pokeEntry.baseStats.spd === 'number') {
+            base_spd = pokeEntry.baseStats.spd;
+          }
+        }
+        if (base_spd && pokeData["Spreads"]) {
+          const spdUp = ["Calm", "Gentle", "Careful", "Sassy"];
+          const spdDown = ["Naughty", "Lax", "Rash", "Naive"];
+          const spdCounts = {};
+          Object.entries(pokeData["Spreads"]).forEach(([spread, count]) => {
+            const parts = spread.split(":");
+            if (parts.length === 2) {
+              const nature = parts[0];
+              const stats = parts[1].split("/").map(x => parseInt(x, 10));
+              const spdEV = stats[4];
+              let natureMultiplier = 1.0;
+              if (spdUp.includes(nature)) natureMultiplier = 1.1;
+              else if (spdDown.includes(nature)) natureMultiplier = 0.9;
+              let IV = 31;
+              if (spdDown.includes(nature) && spdEV === 0) IV = 0;
+              const spd = Math.floor(
+                (Math.floor(((2 * base_spd + IV + Math.floor(spdEV / 4)) * 50) / 100) + 5) * natureMultiplier
+              );
+              spdCounts[spd] = (spdCounts[spd] || 0) + count;
+            }
+          });
+          const totalSpd = Object.values(spdCounts).reduce((a, b) => a + b, 0);
+          sp_def_distribution = Object.keys(spdCounts).sort((a, b) => a - b).map(spd => {
+            const pct = totalSpd > 0 ? ((spdCounts[spd] / totalSpd) * 100).toFixed(2) : 0;
+            return pct > 0 ? [spd, `${pct}%`] : null;
+          }).filter(Boolean);
+        }
+      } catch (e) {
+        sp_def_distribution = [];
+      }
+      // HP distribution
+      let hp_distribution = [];
+      try {
+        let base_hp = null;
+        if (pokedex && typeof pokedex === 'object') {
+          const pokeEntry = pokedex[name] || pokedex[name.toLowerCase().replace(/[^a-z0-9]/g, '')];
+          if (pokeEntry && pokeEntry.baseStats && typeof pokeEntry.baseStats.hp === 'number') {
+            base_hp = pokeEntry.baseStats.hp;
+          }
+        }
+        if (base_hp && pokeData["Spreads"]) {
+          const hpCounts = {};
+          Object.entries(pokeData["Spreads"]).forEach(([spread, count]) => {
+            const parts = spread.split(":");
+            if (parts.length === 2) {
+              const stats = parts[1].split("/").map(x => parseInt(x, 10));
+              const hpEV = stats[0];
+              let IV = 31;
+              const hp = Math.floor(((2 * base_hp + IV + Math.floor(hpEV / 4)) * 50) / 100) + 60;
+              hpCounts[hp] = (hpCounts[hp] || 0) + count;
+            }
+          });
+          const totalHp = Object.values(hpCounts).reduce((a, b) => a + b, 0);
+          hp_distribution = Object.keys(hpCounts).sort((a, b) => a - b).map(hp => {
+            const pct = totalHp > 0 ? ((hpCounts[hp] / totalHp) * 100).toFixed(2) : 0;
+            return pct > 0 ? [hp, `${pct}%`] : null;
+          }).filter(Boolean);
+        }
+      } catch (e) {
+        hp_distribution = [];
+      }
       return {
         items,
         moves,
         abilities,
         natures,
-        speed_distribution
+        speed_distribution,
+        attack_distribution,
+        defense_distribution,
+        sp_atk_distribution,
+        sp_def_distribution,
+        hp_distribution
       };
     }
 
@@ -469,16 +688,17 @@
       $pokemonDetailsPanel.show();
       $pokemonDetailsName.text(name);
       // Fully clear previous grids (remove all .gridjs elements)
-      ['items-grid', 'moves-grid', 'abilities-grid', 'natures-grid'].forEach(function(id) {
-        const $old = $('#' + id);
-        const $new = $('<div>').attr('id', id);
-        $old.replaceWith($new);
+      [$itemsGrid, $movesGrid, $abilitiesGrid, $naturesGrid].forEach($el => {
+        $el.empty();
+        $el.siblings('.gridjs').remove();
+        $el.find('.gridjs').remove();
       });
-      const $itemsGrid = $('#items-grid');
-      const $movesGrid = $('#moves-grid');
-      const $abilitiesGrid = $('#abilities-grid');
-      const $naturesGrid = $('#natures-grid');
       $speedChartContainer.hide();
+      $('#attack-chart-container').hide();
+      $('#defense-chart-container').hide();
+      $('#spatk-chart-container').hide();
+      $('#spdef-chart-container').hide();
+      $('#hp-chart-container').hide();
       if (data.items && data.items.length > 0) {
         new gridjs.Grid({
           columns: ['Item', '%'],
@@ -523,6 +743,7 @@
           }
         }).render($naturesGrid[0]);
       }
+      // Stat Distributions tab
       if (data.speed_distribution && data.speed_distribution.length > 0) {
         $speedChartContainer.show();
         if (window.speedChart && typeof window.speedChart.destroy === 'function') {
@@ -533,6 +754,61 @@
         }, 100);
       } else {
         $speedChartContainer.hide();
+      }
+      if (data.attack_distribution && data.attack_distribution.length > 0) {
+        $('#attack-chart-container').show();
+        if (window.attackChart && typeof window.attackChart.destroy === 'function') {
+          window.attackChart.destroy();
+        }
+        setTimeout(() => {
+          renderAttackChartFromApi(data.attack_distribution);
+        }, 100);
+      } else {
+        $('#attack-chart-container').hide();
+      }
+      if (data.defense_distribution && data.defense_distribution.length > 0) {
+        $('#defense-chart-container').show();
+        if (window.defenseChart && typeof window.defenseChart.destroy === 'function') {
+          window.defenseChart.destroy();
+        }
+        setTimeout(() => {
+          renderDefenseChartFromApi(data.defense_distribution);
+        }, 100);
+      } else {
+        $('#defense-chart-container').hide();
+      }
+      if (data.sp_atk_distribution && data.sp_atk_distribution.length > 0) {
+        $('#spatk-chart-container').show();
+        if (window.spatkChart && typeof window.spatkChart.destroy === 'function') {
+          window.spatkChart.destroy();
+        }
+        setTimeout(() => {
+          renderSpAtkChartFromApi(data.sp_atk_distribution);
+        }, 100);
+      } else {
+        $('#spatk-chart-container').hide();
+      }
+      if (data.sp_def_distribution && data.sp_def_distribution.length > 0) {
+        $('#spdef-chart-container').show();
+        if (window.spdefChart && typeof window.spdefChart.destroy === 'function') {
+          window.spdefChart.destroy();
+        }
+        setTimeout(() => {
+          renderSpDefChartFromApi(data.sp_def_distribution);
+        }, 100);
+      } else {
+        $('#spdef-chart-container').hide();
+      }
+      if (data.hp_distribution && data.hp_distribution.length > 0) {
+        $('#hp-chart-container').show();
+        if (window.hpChart && typeof window.hpChart.destroy === 'function') {
+          window.hpChart.destroy();
+        }
+        setTimeout(() => {
+          renderHpChartFromApi(data.hp_distribution);
+        }, 100);
+      } else {
+        $('#hp-chart-container').hide();
       }
     }
 
@@ -575,13 +851,220 @@
       });
     }
 
+    function renderAttackChartFromApi(attack_distribution) {
+      if (window.attackChart && typeof window.attackChart.destroy === 'function') {
+        window.attackChart.destroy();
+      }
+      const ctx = document.getElementById('attackChart').getContext('2d');
+      const labels = attack_distribution.map(([atk, _]) => atk);
+      const dataArr = attack_distribution.map(([_, pct]) => parseFloat(pct));
+      window.attackChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Usage %',
+            data: dataArr,
+            backgroundColor: 'rgba(255, 159, 64, 0.5)',
+            borderColor: 'rgba(255, 159, 64, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Attack Distribution'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            },
+            x: {
+              title: { display: true, text: 'Attack' }
+            }
+          }
+        }
+      });
+    }
+
+    function renderDefenseChartFromApi(defense_distribution) {
+      if (window.defenseChart && typeof window.defenseChart.destroy === 'function') {
+        window.defenseChart.destroy();
+      }
+      const ctx = document.getElementById('defenseChart').getContext('2d');
+      const labels = defense_distribution.map(([def, _]) => def);
+      const dataArr = defense_distribution.map(([_, pct]) => parseFloat(pct));
+      window.defenseChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Usage %',
+            data: dataArr,
+            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Defense Distribution'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            },
+            x: {
+              title: { display: true, text: 'Defense' }
+            }
+          }
+        }
+      });
+    }
+
+    function renderSpAtkChartFromApi(spatk_distribution) {
+      if (window.spatkChart && typeof window.spatkChart.destroy === 'function') {
+        window.spatkChart.destroy();
+      }
+      const ctx = document.getElementById('spatkChart').getContext('2d');
+      const labels = spatk_distribution.map(([spa, _]) => spa);
+      const dataArr = spatk_distribution.map(([_, pct]) => parseFloat(pct));
+      window.spatkChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Usage %',
+            data: dataArr,
+            backgroundColor: 'rgba(153, 102, 255, 0.5)',
+            borderColor: 'rgba(153, 102, 255, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Special Attack Distribution'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            },
+            x: {
+              title: { display: true, text: 'Sp. Atk' }
+            }
+          }
+        }
+      });
+    }
+
+    function renderSpDefChartFromApi(spdef_distribution) {
+      if (window.spdefChart && typeof window.spdefChart.destroy === 'function') {
+        window.spdefChart.destroy();
+      }
+      const ctx = document.getElementById('spdefChart').getContext('2d');
+      const labels = spdef_distribution.map(([spd, _]) => spd);
+      const dataArr = spdef_distribution.map(([_, pct]) => parseFloat(pct));
+      window.spdefChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Usage %',
+            data: dataArr,
+            backgroundColor: 'rgba(255, 205, 86, 0.5)',
+            borderColor: 'rgba(255, 205, 86, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Special Defense Distribution'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            },
+            x: {
+              title: { display: true, text: 'Sp. Def' }
+            }
+          }
+        }
+      });
+    }
+
+    function renderHpChartFromApi(hp_distribution) {
+      if (window.hpChart && typeof window.hpChart.destroy === 'function') {
+        window.hpChart.destroy();
+      }
+      const ctx = document.getElementById('hpChart').getContext('2d');
+      const labels = hp_distribution.map(([hp, _]) => hp);
+      const dataArr = hp_distribution.map(([_, pct]) => parseFloat(pct));
+      window.hpChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Usage %',
+            data: dataArr,
+            backgroundColor: 'rgba(255, 99, 71, 0.5)',
+            borderColor: 'rgba(255, 99, 71, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'HP Distribution'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            },
+            x: {
+              title: { display: true, text: 'HP' }
+            }
+          }
+        }
+      });
+    }
+
     function filterPokemonList(query) {
       const filter = query.trim().toLowerCase();
-      Array.from($pokemonList.children()).forEach(li => {
-        if (li.textContent.toLowerCase().includes(filter)) {
-          li.style.display = '';
+      $pokemonList.children().each(function() {
+        const $nameSpan = $(this).children('.pokemon-name');
+        const nameText = $nameSpan.text().trim().toLowerCase();
+        if (nameText.includes(filter)) {
+          $(this).removeClass('pokemon-hide');
         } else {
-          li.style.display = 'none';
+          $(this).addClass('pokemon-hide');
         }
       });
     }

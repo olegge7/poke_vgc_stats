@@ -123,6 +123,11 @@ class StatsController < ApplicationController
     end
     # Speed distribution
     speed_distribution = []
+    attack_distribution = []
+    defense_distribution = []
+    sp_atk_distribution = []
+    sp_def_distribution = []
+    hp_distribution = []
     begin
       pokedex_path = Rails.root.join('public', 'pokedex.json')
       pokedex = JSON.parse(File.read(pokedex_path))
@@ -132,6 +137,11 @@ class StatsController < ApplicationController
         base_stats = pokedex[norm_name] && pokedex[norm_name]["baseStats"]
       end
       base_speed = base_stats && base_stats["spe"]
+      base_atk = base_stats && base_stats["atk"]
+      base_def = base_stats && base_stats["def"]
+      base_spa = base_stats && base_stats["spa"]
+      base_spd = base_stats && base_stats["spd"]
+      base_hp = base_stats && base_stats["hp"]
       if base_speed && poke_data["Spreads"]
         speed_up = %w[Timid Hasty Jolly Naive]
         speed_down = %w[Brave Relaxed Quiet Sassy]
@@ -157,15 +167,148 @@ class StatsController < ApplicationController
           speed_distribution << [spd.to_s, "#{pct}%"]
         end
       end
+      # Attack distribution
+      if base_atk && poke_data["Spreads"]
+        atk_up = %w[Lonely Adamant Naughty Brave]
+        atk_down = %w[Bold Modest Calm Timid]
+        atk_counts = Hash.new(0)
+        poke_data["Spreads"].each do |spread, count|
+          parts = spread.split(":")
+          next unless parts.length == 2
+          nature = parts[0]
+          stats = parts[1].split("/").map(&:to_i)
+          atk_ev = stats[1]
+          nature_multiplier = 1.0
+          nature_multiplier = 1.1 if atk_up.include?(nature)
+          nature_multiplier = 0.9 if atk_down.include?(nature)
+          iv = 31
+          iv = 0 if atk_down.include?(nature) && atk_ev == 0
+          atk = (((((2 * base_atk + iv + (atk_ev / 4)) * 50) / 100) + 5) * nature_multiplier).floor
+          atk_counts[atk] += count
+        end
+        total_atk = atk_counts.values.sum
+        atk_counts.keys.sort.each do |atk|
+          pct = total_atk > 0 ? ((atk_counts[atk].to_f / total_atk) * 100).round(2) : 0
+          next if pct == 0 || pct.nan?
+          attack_distribution << [atk.to_s, "#{pct}%"]
+        end
+      end
+      # Defense distribution
+      if base_def && poke_data["Spreads"]
+        def_up = %w[Bold Impish Lax Relaxed]
+        def_down = %w[Lonely Mild Gentle Hasty]
+        def_counts = Hash.new(0)
+        poke_data["Spreads"].each do |spread, count|
+          parts = spread.split(":")
+          next unless parts.length == 2
+          nature = parts[0]
+          stats = parts[1].split("/").map(&:to_i)
+          def_ev = stats[2]
+          nature_multiplier = 1.0
+          nature_multiplier = 1.1 if def_up.include?(nature)
+          nature_multiplier = 0.9 if def_down.include?(nature)
+          iv = 31
+          iv = 0 if def_down.include?(nature) && def_ev == 0
+          defense = (((((2 * base_def + iv + (def_ev / 4)) * 50) / 100) + 5) * nature_multiplier).floor
+          def_counts[defense] += count
+        end
+        total_def = def_counts.values.sum
+        def_counts.keys.sort.each do |def_val|
+          pct = total_def > 0 ? ((def_counts[def_val].to_f / total_def) * 100).round(2) : 0
+          next if pct == 0 || pct.nan?
+          defense_distribution << [def_val.to_s, "#{pct}%"]
+        end
+      end
+      # Sp. Atk distribution
+      if base_spa && poke_data["Spreads"]
+        spa_up = %w[Modest Mild Rash Quiet]
+        spa_down = %w[Adamant Impish Careful Jolly]
+        spa_counts = Hash.new(0)
+        poke_data["Spreads"].each do |spread, count|
+          parts = spread.split(":")
+          next unless parts.length == 2
+          nature = parts[0]
+          stats = parts[1].split("/").map(&:to_i)
+          spa_ev = stats[3]
+          nature_multiplier = 1.0
+          nature_multiplier = 1.1 if spa_up.include?(nature)
+          nature_multiplier = 0.9 if spa_down.include?(nature)
+          iv = 31
+          iv = 0 if spa_down.include?(nature) && spa_ev == 0
+          spa = (((((2 * base_spa + iv + (spa_ev / 4)) * 50) / 100) + 5) * nature_multiplier).floor
+          spa_counts[spa] += count
+        end
+        total_spa = spa_counts.values.sum
+        spa_counts.keys.sort.each do |spa_val|
+          pct = total_spa > 0 ? ((spa_counts[spa_val].to_f / total_spa) * 100).round(2) : 0
+          next if pct == 0 || pct.nan?
+          sp_atk_distribution << [spa_val.to_s, "#{pct}%"]
+        end
+      end
+      # Sp. Def distribution
+      if base_spd && poke_data["Spreads"]
+        spd_up = %w[Calm Gentle Careful Sassy]
+        spd_down = %w[Naughty Lax Rash Naive]
+        spd_counts = Hash.new(0)
+        poke_data["Spreads"].each do |spread, count|
+          parts = spread.split(":")
+          next unless parts.length == 2
+          nature = parts[0]
+          stats = parts[1].split("/").map(&:to_i)
+          spd_ev = stats[4]
+          nature_multiplier = 1.0
+          nature_multiplier = 1.1 if spd_up.include?(nature)
+          nature_multiplier = 0.9 if spd_down.include?(nature)
+          iv = 31
+          iv = 0 if spd_down.include?(nature) && spd_ev == 0
+          spd = (((((2 * base_spd + iv + (spd_ev / 4)) * 50) / 100) + 5) * nature_multiplier).floor
+          spd_counts[spd] += count
+        end
+        total_spd = spd_counts.values.sum
+        spd_counts.keys.sort.each do |spd_val|
+          pct = total_spd > 0 ? ((spd_counts[spd_val].to_f / total_spd) * 100).round(2) : 0
+          next if pct == 0 || pct.nan?
+          sp_def_distribution << [spd_val.to_s, "#{pct}%"]
+        end
+      end
+      # HP distribution
+      if base_hp && poke_data["Spreads"]
+        hp_counts = Hash.new(0)
+        poke_data["Spreads"].each do |spread, count|
+          parts = spread.split(":")
+          next unless parts.length == 2
+          stats = parts[1].split("/").map(&:to_i)
+          hp_ev = stats[0]
+          iv = 31
+          hp = (((2 * base_hp + iv + (hp_ev / 4)) * 50) / 100).floor + 60
+          hp_counts[hp] += count
+        end
+        total_hp = hp_counts.values.sum
+        hp_counts.keys.sort.each do |hp_val|
+          pct = total_hp > 0 ? ((hp_counts[hp_val].to_f / total_hp) * 100).round(2) : 0
+          next if pct == 0 || pct.nan?
+          hp_distribution << [hp_val.to_s, "#{pct}%"]
+        end
+      end
     rescue => e
       speed_distribution = []
+      attack_distribution = []
+      defense_distribution = []
+      sp_atk_distribution = []
+      sp_def_distribution = []
+      hp_distribution = []
     end
     render json: {
       items: items,
       moves: moves,
       abilities: abilities,
       natures: natures,
-      speed_distribution: speed_distribution
+      speed_distribution: speed_distribution,
+      attack_distribution: attack_distribution,
+      defense_distribution: defense_distribution,
+      sp_atk_distribution: sp_atk_distribution,
+      sp_def_distribution: sp_def_distribution,
+      hp_distribution: hp_distribution
     }
   end
 end
