@@ -32,6 +32,9 @@
                   <canvas id="usageChart" height="100"></canvas>
                 </div>
                 <div class="col-md-6" id="restrictedChartDiv"></div>
+                <div class="col-12 mt-4" id="restrictedPairsChartDiv" style="display:none;">
+                  <canvas id="restrictedPairsChart" height="100"></canvas>
+                </div>
               </div>
             </div>
           </div>
@@ -44,7 +47,7 @@
     <div class="col-md-4" style="max-width: 400px; min-width: 300px;">
       <div id="sidebarPanel" style="display: none;">
         <h5>All Pokémon</h5>
-        <input id="pokemonSearch" type="text" class="form-control mb-2" placeholder="Search Pokémon...">
+        <input id="pokemonSearch" type="search" class="form-control mb-2" placeholder="Search Pokémon...">
         <ul id="pokemonList" class="list-group mb-3"></ul>
       </div>
     </div>
@@ -147,6 +150,7 @@
     const $movesGrid = $('#moves-grid');
     const $abilitiesGrid = $('#abilities-grid');
     const $naturesGrid = $('#natures-grid');
+    const $usageChartsCardHeader = $('.card-header:has(#usageChartsToggleBtn)');
 
     // Fetch months
     $.getJSON('/months', function(months) {
@@ -266,9 +270,11 @@
       // Render restricted chart
       const $usageChartCol = $('#usageChartCol');
       const $restrictedChartDiv = $('#restrictedChartDiv');
+      const $restrictedPairsChartDiv = $('#restrictedPairsChartDiv');
       if (topRestricted.length === 0) {
         $usageChartCol.removeClass('col-md-6').addClass('col-12');
         $restrictedChartDiv.hide();
+        $restrictedPairsChartDiv.hide();
       } else {
         $usageChartCol.removeClass('col-12').addClass('col-md-6');
         $restrictedChartDiv.show();
@@ -308,6 +314,62 @@
             }
           }
         });
+        // Aggregate restricted pairs
+        const pairCounts = {};
+        let totalTeams = 0;
+        Object.entries(pokemonData).forEach(([pokeName, pokeData]) => {
+          if (!pokeData.Teammates) return;
+          Object.entries(pokeData.Teammates).forEach(([teammate, count]) => {
+            if (restrictedSet.has(pokeName) && restrictedSet.has(teammate)) {
+              const pair = [pokeName, teammate].sort().join(' + ');
+              pairCounts[pair] = (pairCounts[pair] || 0) + count;
+              totalTeams += count;
+            }
+          });
+        });
+        const topPairs = Object.entries(pairCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8);
+        const pairLabels = topPairs.map(([pair]) => pair);
+        const pairData = topPairs.map(([_, count]) => ((count / totalTeams) * 100).toFixed(2));
+        if (topPairs.length === 0) {
+          $restrictedPairsChartDiv.hide();
+        } else {
+          $restrictedPairsChartDiv.show();
+          if (window.restrictedPairsChart && typeof window.restrictedPairsChart.destroy === 'function') {
+            window.restrictedPairsChart.destroy();
+          }
+          const pairsCtx = document.getElementById('restrictedPairsChart').getContext('2d');
+          window.restrictedPairsChart = new Chart(pairsCtx, {
+            type: 'bar',
+            data: {
+              labels: pairLabels,
+              datasets: [{
+                label: 'Usage %',
+                data: pairData,
+                backgroundColor: 'rgba(54, 162, 100, 0.7)', // distinct greenish color
+                borderColor: 'rgba(54, 162, 100, 1)',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: false },
+                title: {
+                  display: true,
+                  text: 'Top 8 Restricted Pokemon Pairs Usage %'
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: 'Usage %' }
+                }
+              }
+            }
+          });
+        }
       }
     }
 
@@ -1204,5 +1266,12 @@
         $chevronIcon.css('transform', 'rotate(-90deg)');
       }
     }
+
+    // Make the entire card-header clickable to toggle collapse
+    $usageChartsCardHeader.on('click', function(e) {
+      // Prevent double toggle if the button itself was clicked
+      if ($(e.target).closest('#usageChartsToggleBtn').length > 0) return;
+      $('#usageChartsToggleBtn').trigger('click');
+    });
   });
 </script>
