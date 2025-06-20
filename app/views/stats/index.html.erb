@@ -50,7 +50,41 @@
     </div>
     <!-- Main Content -->
     <div class="col-md-8">
-      <div id="pokemonDetails" class="mb-4"></div>
+      <div id="pokemonDetailsMessage">
+        <div id="pokemonDetailsLoading" class="text-center my-4" style="display:none;">
+          <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+        </div>
+        <div id="pokemonDetailsError" class="my-4 alert alert-danger" style="display:none;"></div>
+      </div>
+      <div id="pokemonDetailsPanel" class="mb-4" style="display:none;">
+        <h3 id="pokemonDetailsName"></h3>
+        <ul class="nav nav-tabs" id="pokeTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="speed-tab" data-bs-toggle="tab" data-bs-target="#speed" type="button" role="tab">Speed</button>
+          </li>
+        </ul>
+        <div class="tab-content" id="pokeTabsContent">
+          <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <h5 class="mt-3">Items</h5>
+            <div id="items-grid"></div>
+            <h5 class="mt-3">Moves</h5>
+            <div id="moves-grid"></div>
+            <h5 class="mt-3">Abilities</h5>
+            <div id="abilities-grid"></div>
+            <h5 class="mt-3">Natures</h5>
+            <div id="natures-grid"></div>
+          </div>
+          <div class="tab-pane fade" id="speed" role="tabpanel">
+            <div id="speed-chart-container" class="mt-3">
+              <h5>Speed Distribution</h5>
+              <canvas id="speedChart" height="80"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
       <div id="statsDisplay" class="mt-4">
         <!-- Additional stats and charts will be rendered here -->
       </div>
@@ -58,6 +92,7 @@
   </div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -69,98 +104,93 @@
   let pokedex = [];
   let restrictedList = [];
 
-  document.addEventListener('DOMContentLoaded', function() {
-    const monthSelect = document.getElementById('monthSelect');
-    const formatSelect = document.getElementById('formatSelect');
-    const loadDataBtn = document.getElementById('loadDataBtn');
-    const usageChartCtx = document.getElementById('usageChart').getContext('2d');
-    const pokemonList = document.getElementById('pokemonList');
-    const pokemonDetails = document.getElementById('pokemonDetails');
-    const sidebarPanel = document.getElementById('sidebarPanel');
-    const pokemonSearch = document.getElementById('pokemonSearch');
-    const usageChartsCollapse = document.getElementById('usageChartsCollapse');
-    const chevronIcon = document.querySelector('#usageChartsToggleBtn .chevron-icon');
+  $(function() {
+    const $monthSelect = $('#monthSelect');
+    const $formatSelect = $('#formatSelect');
+    const $loadDataBtn = $('#loadDataBtn');
+    const $usageChartCtx = $('#usageChart')[0].getContext('2d');
+    const $pokemonList = $('#pokemonList');
+    const $sidebarPanel = $('#sidebarPanel');
+    const $pokemonSearch = $('#pokemonSearch');
+    const $usageChartsCollapse = $('#usageChartsCollapse');
+    const $chevronIcon = $('#usageChartsToggleBtn .chevron-icon');
+    const $pokemonDetailsPanel = $('#pokemonDetailsPanel');
+    const $pokemonDetailsName = $('#pokemonDetailsName');
+    const $pokemonDetailsLoading = $('#pokemonDetailsLoading');
+    const $pokemonDetailsError = $('#pokemonDetailsError');
+    const $itemsGrid = $('#items-grid');
+    const $movesGrid = $('#moves-grid');
+    const $abilitiesGrid = $('#abilities-grid');
+    const $naturesGrid = $('#natures-grid');
+    const $speedChartContainer = $('#speed-chart-container');
 
     // Fetch months
-    fetch('/months')
-      .then(res => res.json())
-      .then(months => {
-        months.reverse().forEach(month => {
-          const opt = document.createElement('option');
-          opt.value = month;
-          opt.textContent = month;
-          monthSelect.appendChild(opt);
-        });
-        if (months.length > 0) {
-          monthSelect.value = months[0];
-          fetchFormats(months[0]);
-        }
+    $.getJSON('/months', function(months) {
+      months.reverse().forEach(function(month) {
+        $monthSelect.append($('<option>').val(month).text(month));
       });
+      if (months.length > 0) {
+        $monthSelect.val(months[0]);
+        fetchFormats(months[0]);
+      }
+    });
 
-    monthSelect.addEventListener('change', function() {
-      fetchFormats(this.value);
+    $monthSelect.on('change', function() {
+      fetchFormats($(this).val());
       updateLoadButtonState();
     });
 
-    formatSelect.addEventListener('change', function() {
+    $formatSelect.on('change', function() {
       updateLoadButtonState();
     });
 
-    loadDataBtn.addEventListener('click', function() {
+    $loadDataBtn.on('click', function() {
       fetchAndRenderData();
     });
 
-    if (pokemonSearch) {
-      pokemonSearch.addEventListener('input', function() {
-        filterPokemonList(this.value);
+    if ($pokemonSearch.length) {
+      $pokemonSearch.on('input', function() {
+        filterPokemonList($(this).val());
       });
     }
 
     function fetchFormats(month) {
-      formatSelect.innerHTML = '';
-      fetch(`/formats?month=${month}`)
-        .then(res => res.json())
-        .then(formats => {
-          formats.forEach(format => {
-            const opt = document.createElement('option');
-            opt.value = format;
-            opt.textContent = format;
-            formatSelect.appendChild(opt);
-          });
-          if (formats.length > 0) {
-            formatSelect.value = formats[0];
-          }
-          updateLoadButtonState();
+      $formatSelect.empty();
+      $.getJSON(`/formats?month=${month}`, function(formats) {
+        formats.forEach(function(format) {
+          $formatSelect.append($('<option>').val(format).text(format));
         });
+        if (formats.length > 0) {
+          $formatSelect.val(formats[0]);
+        }
+        updateLoadButtonState();
+      });
     }
 
     function updateLoadButtonState() {
-      loadDataBtn.disabled = !(monthSelect.value && formatSelect.value);
+      $loadDataBtn.prop('disabled', !($monthSelect.val() && $formatSelect.val()));
     }
 
     function fetchAndRenderData() {
-      const month = monthSelect.value;
-      const format = formatSelect.value;
+      const month = $monthSelect.val();
+      const format = $formatSelect.val();
       if (!month || !format) return;
-      fetch(`/data?month=${month}&format=${format}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.error) {
-            alert(data.error);
-            return;
-          }
-          globalPokemonData = data.data;
-          renderUsageCharts(globalPokemonData);
-          renderPokemonList(globalPokemonData);
-          pokemonDetails.innerHTML = '';
-          // Show sidebar and clear search
-          sidebarPanel.style.display = '';
-          pokemonSearch.value = '';
-          // Show the usage charts card and expand the collapse
-          document.getElementById('usageChartsCardWrapper').style.display = '';
-          let collapse = bootstrap.Collapse.getOrCreateInstance(document.getElementById('usageChartsCollapse'));
-          collapse.show();
-        });
+      $.getJSON(`/data?month=${month}&format=${format}`, function(data) {
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        globalPokemonData = data.data;
+        renderUsageCharts(globalPokemonData);
+        renderPokemonList(globalPokemonData);
+        // Show sidebar and clear search
+        $sidebarPanel.show();
+        $pokemonSearch.val('');
+        // Show the usage charts card and expand the collapse
+        $('#usageChartsCardWrapper').show();
+        let collapse = bootstrap.Collapse.getOrCreateInstance($('#usageChartsCollapse')[0]);
+        collapse.show();
+      });
     }
 
     function renderUsageCharts(pokemonData) {
@@ -176,7 +206,7 @@
 
       // Render regular chart
       if (usageChart) usageChart.destroy();
-      usageChart = new Chart(usageChartCtx, {
+      usageChart = new Chart($usageChartCtx, {
         type: 'bar',
         data: {
           labels: topRegular.map(([name]) => name),
@@ -207,9 +237,11 @@
       });
 
       // Render restricted chart
-      const restrictedChartDiv = document.getElementById('restrictedChartDiv');
-      restrictedChartDiv.innerHTML = '<canvas id="restrictedChart" height="100"></canvas>';
-      const restrictedChartCtx = document.getElementById('restrictedChart').getContext('2d');
+      const $restrictedChartDiv = $('#restrictedChartDiv');
+      $restrictedChartDiv.empty();
+      const $canvas = $('<canvas id="restrictedChart" height="100"></canvas>');
+      $restrictedChartDiv.append($canvas);
+      const restrictedChartCtx = $canvas[0].getContext('2d');
       if (window.restrictedChart && typeof window.restrictedChart.destroy === 'function') {
         window.restrictedChart.destroy();
       }
@@ -245,71 +277,67 @@
     }
 
     function renderPokemonList(pokemonData) {
-      pokemonList.innerHTML = '';
-      allPokemonNames = Object.keys(pokemonData).sort();
-      allPokemonNames.forEach(name => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item list-group-item-action';
-        li.textContent = name;
-        li.style.cursor = 'pointer';
-        li.addEventListener('click', function() {
+      $pokemonList.empty();
+      const entries = Object.entries(pokemonData)
+        .filter(([_, val]) => typeof val.usage === 'number')
+        .sort((a, b) => b[1].usage - a[1].usage);
+      allPokemonNames = entries.map(([name]) => name);
+      entries.forEach(([name, val]) => {
+        const $li = $('<li>').addClass('list-group-item list-group-item-action d-flex justify-content-between align-items-center');
+        const $nameSpan = $('<span>').text(name);
+        const $badge = $('<span>').addClass('badge bg-primary rounded-pill').text(`${(val.usage * 100).toFixed(2)}%`);
+        $li.append($nameSpan, $badge);
+        $li.css('cursor', 'pointer');
+        $li.on('click', function() {
           fetchAndRenderPokemonDetails(name);
         });
-        pokemonList.appendChild(li);
+        $pokemonList.append($li);
       });
     }
 
+    function showLoading() {
+      $pokemonDetailsLoading.show();
+      $pokemonDetailsError.hide();
+    }
+    function showError(msg) {
+      $pokemonDetailsLoading.hide();
+      $pokemonDetailsError.text(msg).show();
+    }
+    function clearMessages() {
+      $pokemonDetailsLoading.hide();
+      $pokemonDetailsError.hide();
+    }
+
     function fetchAndRenderPokemonDetails(name) {
-      const month = monthSelect.value;
-      const format = formatSelect.value;
+      const month = $monthSelect.val();
+      const format = $formatSelect.val();
       if (!month || !format || !name) return;
-      pokemonDetails.innerHTML = '<div class="text-center my-4"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-      fetch(`/pokemon_details?month=${encodeURIComponent(month)}&format=${encodeURIComponent(format)}&name=${encodeURIComponent(name)}`)
-        .then(res => res.json())
-        .then(data => {
+      $pokemonDetailsPanel.hide();
+      showLoading();
+      $.getJSON(`/pokemon_details?month=${encodeURIComponent(month)}&format=${encodeURIComponent(format)}&name=${encodeURIComponent(name)}`)
+        .done(function(data) {
           if (data.error) {
-            pokemonDetails.innerHTML = `<div class='alert alert-danger'>${data.error}</div>`;
+            showError(data.error);
+            $pokemonDetailsPanel.hide();
             return;
           }
+          clearMessages();
           renderPokemonDetailsFromApi(name, data);
         })
-        .catch(err => {
-          pokemonDetails.innerHTML = `<div class='alert alert-danger'>Failed to load details.</div>`;
+        .fail(function() {
+          showError('Failed to load details.');
+          $pokemonDetailsPanel.hide();
         });
     }
 
     function renderPokemonDetailsFromApi(name, data) {
-      // Clear previous details
-      pokemonDetails.innerHTML = '';
-      // Create main structure with tabs
-      const html = `
-        <h3>${name}</h3>
-        <ul class="nav nav-tabs" id="pokeTabs" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="speed-tab" data-bs-toggle="tab" data-bs-target="#speed" type="button" role="tab">Speed</button>
-          </li>
-        </ul>
-        <div class="tab-content" id="pokeTabsContent">
-          <div class="tab-pane fade show active" id="overview" role="tabpanel">
-            <h5 class="mt-3">Items</h5>
-            <div id="items-grid"></div>
-            <h5 class="mt-3">Moves</h5>
-            <div id="moves-grid"></div>
-            <h5 class="mt-3">Abilities</h5>
-            <div id="abilities-grid"></div>
-            <h5 class="mt-3">Natures</h5>
-            <div id="natures-grid"></div>
-          </div>
-          <div class="tab-pane fade" id="speed" role="tabpanel">
-            <div id="speed-chart-container" class="mt-3"></div>
-          </div>
-        </div>
-      `;
-      pokemonDetails.innerHTML = html;
-      // Render grids
+      $pokemonDetailsPanel.show();
+      $pokemonDetailsName.text(name);
+      $itemsGrid.empty();
+      $movesGrid.empty();
+      $abilitiesGrid.empty();
+      $naturesGrid.empty();
+      $speedChartContainer.hide();
       if (data.items && data.items.length > 0) {
         new gridjs.Grid({
           columns: ['Item', '%'],
@@ -319,7 +347,7 @@
             th: { 'text-align': 'left' },
             td: { 'text-align': 'left' }
           }
-        }).render(document.getElementById('items-grid'));
+        }).render($itemsGrid[0]);
       }
       if (data.moves && data.moves.length > 0) {
         new gridjs.Grid({
@@ -330,7 +358,7 @@
             th: { 'text-align': 'left' },
             td: { 'text-align': 'left' }
           }
-        }).render(document.getElementById('moves-grid'));
+        }).render($movesGrid[0]);
       }
       if (data.abilities && data.abilities.length > 0) {
         new gridjs.Grid({
@@ -341,25 +369,26 @@
             th: { 'text-align': 'left' },
             td: { 'text-align': 'left' }
           }
-        }).render(document.getElementById('abilities-grid'));
+        }).render($abilitiesGrid[0]);
       }
       if (data.natures && data.natures.length > 0) {
         new gridjs.Grid({
           columns: ['Nature', 'Usage %', 'Common Spreads'],
           data: data.natures.map(([nature, pct, spreads]) => [nature, pct, gridjs.html(spreads)]),
-           style: {
+          style: {
             table: { 'font-size': '0.9rem' },
             th: { 'text-align': 'left' },
             td: { 'text-align': 'left' }
           }
-        }).render(document.getElementById('natures-grid'));
+        }).render($naturesGrid[0]);
       }
-      // Speed tab content
       if (data.speed_distribution && data.speed_distribution.length > 0) {
-        document.getElementById('speed-chart-container').innerHTML = '<h5>Speed Distribution</h5><canvas id="speedChart" height="80"></canvas>';
+        $speedChartContainer.show();
         setTimeout(() => {
           renderSpeedChartFromApi(data.speed_distribution);
-        }, 100); // Timeout to allow tab to become visible
+        }, 100);
+      } else {
+        $speedChartContainer.hide();
       }
     }
 
@@ -404,7 +433,7 @@
 
     function filterPokemonList(query) {
       const filter = query.trim().toLowerCase();
-      Array.from(pokemonList.children).forEach(li => {
+      Array.from($pokemonList.children()).forEach(li => {
         if (li.textContent.toLowerCase().includes(filter)) {
           li.style.display = '';
         } else {
@@ -521,18 +550,18 @@
       .then(res => res.json())
       .then(data => { restrictedList = data; });
 
-    if (usageChartsCollapse && chevronIcon) {
-      usageChartsCollapse.addEventListener('show.bs.collapse', function() {
-        chevronIcon.style.transform = 'rotate(0deg)';
+    if ($usageChartsCollapse.length && $chevronIcon.length) {
+      $usageChartsCollapse.on('show.bs.collapse', function() {
+        $chevronIcon.css('transform', 'rotate(0deg)');
       });
-      usageChartsCollapse.addEventListener('hide.bs.collapse', function() {
-        chevronIcon.style.transform = 'rotate(-90deg)';
+      $usageChartsCollapse.on('hide.bs.collapse', function() {
+        $chevronIcon.css('transform', 'rotate(-90deg)');
       });
       // Set initial state
-      if (usageChartsCollapse.classList.contains('show')) {
-        chevronIcon.style.transform = 'rotate(0deg)';
+      if ($usageChartsCollapse.hasClass('show')) {
+        $chevronIcon.css('transform', 'rotate(0deg)');
       } else {
-        chevronIcon.style.transform = 'rotate(-90deg)';
+        $chevronIcon.css('transform', 'rotate(-90deg)');
       }
     }
   });
