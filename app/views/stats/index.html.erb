@@ -126,6 +126,7 @@
   let cachedChaosData = null;
   let cachedMonth = null;
   let cachedFormat = null;
+  let itemsGridInstance, movesGridInstance, abilitiesGridInstance, naturesGridInstance;
 
   $(function() {
     const $monthSelect = $('#monthSelect');
@@ -688,6 +689,10 @@
       $pokemonDetailsPanel.show();
       $pokemonDetailsName.text(name);
       // Fully clear previous grids (remove all .gridjs elements)
+      if (window.itemsGridInstance) window.itemsGridInstance.destroy();
+      if (window.movesGridInstance) window.movesGridInstance.destroy();
+      if (window.abilitiesGridInstance) window.abilitiesGridInstance.destroy();
+      if (window.naturesGridInstance) window.naturesGridInstance.destroy();
       [$itemsGrid, $movesGrid, $abilitiesGrid, $naturesGrid].forEach($el => {
         $el.empty();
         $el.siblings('.gridjs').remove();
@@ -700,7 +705,7 @@
       $('#spdef-chart-container').hide();
       $('#hp-chart-container').hide();
       if (data.items && data.items.length > 0) {
-        new gridjs.Grid({
+        window.itemsGridInstance = new gridjs.Grid({
           columns: ['Item', '%'],
           data: data.items,
           style: {
@@ -709,9 +714,11 @@
             td: { 'text-align': 'left' }
           }
         }).render($itemsGrid[0]);
+      } else {
+        window.itemsGridInstance = null;
       }
       if (data.moves && data.moves.length > 0) {
-        new gridjs.Grid({
+        window.movesGridInstance = new gridjs.Grid({
           columns: ['Move', '%'],
           data: data.moves,
           style: {
@@ -720,9 +727,11 @@
             td: { 'text-align': 'left' }
           }
         }).render($movesGrid[0]);
+      } else {
+        window.movesGridInstance = null;
       }
       if (data.abilities && data.abilities.length > 0) {
-        new gridjs.Grid({
+        window.abilitiesGridInstance = new gridjs.Grid({
           columns: ['Ability', '%'],
           data: data.abilities,
           style: {
@@ -731,9 +740,11 @@
             td: { 'text-align': 'left' }
           }
         }).render($abilitiesGrid[0]);
+      } else {
+        window.abilitiesGridInstance = null;
       }
       if (data.natures && data.natures.length > 0) {
-        new gridjs.Grid({
+        window.naturesGridInstance = new gridjs.Grid({
           columns: ['Nature', 'Usage %', 'Common Spreads'],
           data: data.natures.map(([nature, pct, spreads]) => [nature, pct, gridjs.html(spreads)]),
           style: {
@@ -742,6 +753,8 @@
             td: { 'text-align': 'left' }
           }
         }).render($naturesGrid[0]);
+      } else {
+        window.naturesGridInstance = null;
       }
       // Stat Distributions tab
       if (data.speed_distribution && data.speed_distribution.length > 0) {
