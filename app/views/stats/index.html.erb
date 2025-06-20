@@ -103,6 +103,9 @@
   let allPokemonNames = [];
   let pokedex = [];
   let restrictedList = [];
+  let cachedChaosData = null;
+  let cachedMonth = null;
+  let cachedFormat = null;
 
   $(function() {
     const $monthSelect = $('#monthSelect');
@@ -118,10 +121,6 @@
     const $pokemonDetailsName = $('#pokemonDetailsName');
     const $pokemonDetailsLoading = $('#pokemonDetailsLoading');
     const $pokemonDetailsError = $('#pokemonDetailsError');
-    const $itemsGrid = $('#items-grid');
-    const $movesGrid = $('#moves-grid');
-    const $abilitiesGrid = $('#abilities-grid');
-    const $naturesGrid = $('#natures-grid');
     const $speedChartContainer = $('#speed-chart-container');
 
     // Fetch months
@@ -181,6 +180,9 @@
           return;
         }
         globalPokemonData = data.data;
+        cachedChaosData = data.data;
+        cachedMonth = month;
+        cachedFormat = format;
         renderUsageCharts(globalPokemonData);
         renderPokemonList(globalPokemonData);
         // Show sidebar and clear search
@@ -314,29 +316,154 @@
       if (!month || !format || !name) return;
       $pokemonDetailsPanel.hide();
       showLoading();
-      $.getJSON(`/pokemon_details?month=${encodeURIComponent(month)}&format=${encodeURIComponent(format)}&name=${encodeURIComponent(name)}`)
-        .done(function(data) {
-          if (data.error) {
-            showError(data.error);
-            $pokemonDetailsPanel.hide();
-            return;
-          }
-          clearMessages();
-          renderPokemonDetailsFromApi(name, data);
-        })
-        .fail(function() {
-          showError('Failed to load details.');
+      // Use cached data if available and month/format match
+      if (cachedChaosData && cachedMonth === month && cachedFormat === format) {
+        clearMessages();
+        const pokeData = cachedChaosData[name];
+        if (!pokeData) {
+          showError('Pokémon not found in data');
           $pokemonDetailsPanel.hide();
+          return;
+        }
+        // Extract details from cached data (mimic backend logic)
+        renderPokemonDetailsFromApi(name, extractPokemonDetailsFromChaos(name, pokeData));
+      } else {
+        // Fallback: fetch from backend if cache is missing or month/format changed
+        $.getJSON(`/pokemon_details?month=${encodeURIComponent(month)}&format=${encodeURIComponent(format)}&name=${encodeURIComponent(name)}`)
+          .done(function(data) {
+            if (data.error) {
+              showError(data.error);
+              $pokemonDetailsPanel.hide();
+              return;
+            }
+            clearMessages();
+            renderPokemonDetailsFromApi(name, data);
+          })
+          .fail(function() {
+            showError('Failed to load details.');
+            $pokemonDetailsPanel.hide();
+          });
+      }
+    }
+
+    function extractPokemonDetailsFromChaos(name, pokeData) {
+      // This mimics the backend logic for extracting details from chaos data
+      const total = pokeData["Raw count"] || 1;
+      // Items
+      let items = [];
+      if (pokeData["Items"]) {
+        const totalItems = Object.values(pokeData["Items"]).reduce((a, b) => a + b, 0);
+        items = Object.entries(pokeData["Items"]).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([item, count]) => {
+          const pct = totalItems > 0 ? ((count / totalItems) * 100).toFixed(2) : 0;
+          return pct > 0 ? [item, `${pct}%`] : null;
+        }).filter(Boolean);
+      }
+      // Moves
+      let moves = [];
+      if (pokeData["Moves"]) {
+        const totalMoves = Object.values(pokeData["Moves"]).reduce((a, b) => a + b, 0);
+        moves = Object.entries(pokeData["Moves"]).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([move, count]) => {
+          const pct = totalMoves > 0 ? ((count / totalMoves) * 100).toFixed(2) : 0;
+          return pct > 0 ? [move, `${pct}%`] : null;
+        }).filter(Boolean);
+      }
+      // Abilities
+      let abilities = [];
+      if (pokeData["Abilities"]) {
+        const totalAbilities = Object.values(pokeData["Abilities"]).reduce((a, b) => a + b, 0);
+        abilities = Object.entries(pokeData["Abilities"]).sort((a, b) => b[1] - a[1]).map(([ability, count]) => {
+          const pct = totalAbilities > 0 ? ((count / totalAbilities) * 100).toFixed(2) : 0;
+          return pct > 0 ? [ability, `${pct}%`] : null;
+        }).filter(Boolean);
+      }
+      // Natures
+      let natures = [];
+      if (pokeData["Spreads"]) {
+        const natureTotals = {};
+        const natureSpreads = {};
+        Object.entries(pokeData["Spreads"]).forEach(([spread, count]) => {
+          const parts = spread.split(":");
+          const nature = parts[0];
+          natureTotals[nature] = (natureTotals[nature] || 0) + count;
+          if (!natureSpreads[nature]) natureSpreads[nature] = {};
+          natureSpreads[nature][spread] = (natureSpreads[nature][spread] || 0) + count;
         });
+        const totalSpreads = Object.values(pokeData["Spreads"]).reduce((a, b) => a + b, 0);
+        natures = Object.entries(natureTotals).sort((a, b) => b[1] - a[1]).map(([nature, count]) => {
+          const pct = totalSpreads > 0 ? ((count / totalSpreads) * 100).toFixed(2) : 0;
+          if (pct == 0) return null;
+          const spreadsForNature = Object.entries(natureSpreads[nature] || {}).sort((a, b) => b[1] - a[1]);
+          const commonSpreads = spreadsForNature.slice(0, 5).map(([spread, spreadCount]) => {
+            const evs = spread.split(":")[1];
+            const spreadPct = count > 0 ? ((spreadCount / count) * 100).toFixed(2) : 0;
+            if (spreadPct == 0) return null;
+            return `${evs} (${spreadPct}%)`;
+          }).filter(Boolean).join('<br>');
+          return [nature, `${pct}%`, commonSpreads];
+        }).filter(Boolean);
+      }
+      // Speed distribution
+      let speed_distribution = [];
+      try {
+        let base_speed = null;
+        if (pokedex && typeof pokedex === 'object') {
+          const pokeEntry = pokedex[name] || pokedex[name.toLowerCase().replace(/[^a-z0-9]/g, '')];
+          if (pokeEntry && pokeEntry.baseStats && typeof pokeEntry.baseStats.spe === 'number') {
+            base_speed = pokeEntry.baseStats.spe;
+          }
+        }
+        if (base_speed && pokeData["Spreads"]) {
+          const speedUp = ["Timid", "Hasty", "Jolly", "Naive"];
+          const speedDown = ["Brave", "Relaxed", "Quiet", "Sassy"];
+          const speedCounts = {};
+          Object.entries(pokeData["Spreads"]).forEach(([spread, count]) => {
+            const parts = spread.split(":");
+            if (parts.length === 2) {
+              const nature = parts[0];
+              const stats = parts[1].split("/").map(x => parseInt(x, 10));
+              const speedEV = stats[5];
+              let natureMultiplier = 1.0;
+              if (speedUp.includes(nature)) natureMultiplier = 1.1;
+              else if (speedDown.includes(nature)) natureMultiplier = 0.9;
+              let IV = 31;
+              if (speedDown.includes(nature) && speedEV === 0) IV = 0;
+              const speed = Math.floor(
+                (Math.floor(((2 * base_speed + IV + Math.floor(speedEV / 4)) * 50) / 100) + 5) * natureMultiplier
+              );
+              speedCounts[speed] = (speedCounts[speed] || 0) + count;
+            }
+          });
+          const totalSpeed = Object.values(speedCounts).reduce((a, b) => a + b, 0);
+          speed_distribution = Object.keys(speedCounts).sort((a, b) => a - b).map(spd => {
+            const pct = totalSpeed > 0 ? ((speedCounts[spd] / totalSpeed) * 100).toFixed(2) : 0;
+            return pct > 0 ? [spd, `${pct}%`] : null;
+          }).filter(Boolean);
+        }
+      } catch (e) {
+        speed_distribution = [];
+      }
+      return {
+        items,
+        moves,
+        abilities,
+        natures,
+        speed_distribution
+      };
     }
 
     function renderPokemonDetailsFromApi(name, data) {
       $pokemonDetailsPanel.show();
       $pokemonDetailsName.text(name);
-      $itemsGrid.empty();
-      $movesGrid.empty();
-      $abilitiesGrid.empty();
-      $naturesGrid.empty();
+      // Fully clear previous grids (remove all .gridjs elements)
+      ['items-grid', 'moves-grid', 'abilities-grid', 'natures-grid'].forEach(function(id) {
+        const $old = $('#' + id);
+        const $new = $('<div>').attr('id', id);
+        $old.replaceWith($new);
+      });
+      const $itemsGrid = $('#items-grid');
+      const $movesGrid = $('#moves-grid');
+      const $abilitiesGrid = $('#abilities-grid');
+      const $naturesGrid = $('#natures-grid');
       $speedChartContainer.hide();
       if (data.items && data.items.length > 0) {
         new gridjs.Grid({
@@ -384,6 +511,9 @@
       }
       if (data.speed_distribution && data.speed_distribution.length > 0) {
         $speedChartContainer.show();
+        if (window.speedChart && typeof window.speedChart.destroy === 'function') {
+          window.speedChart.destroy();
+        }
         setTimeout(() => {
           renderSpeedChartFromApi(data.speed_distribution);
         }, 100);
