@@ -1,3 +1,4 @@
+<link href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
 <div class="container-fluid mt-4">
   <h1>Pokémon VGC Stats</h1>
   <div class="row mb-3">
@@ -57,6 +58,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -251,9 +253,152 @@
         li.textContent = name;
         li.style.cursor = 'pointer';
         li.addEventListener('click', function() {
-          renderPokemonDetails(name, pokemonData[name]);
+          fetchAndRenderPokemonDetails(name);
         });
         pokemonList.appendChild(li);
+      });
+    }
+
+    function fetchAndRenderPokemonDetails(name) {
+      const month = monthSelect.value;
+      const format = formatSelect.value;
+      if (!month || !format || !name) return;
+      pokemonDetails.innerHTML = '<div class="text-center my-4"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+      fetch(`/pokemon_details?month=${encodeURIComponent(month)}&format=${encodeURIComponent(format)}&name=${encodeURIComponent(name)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            pokemonDetails.innerHTML = `<div class='alert alert-danger'>${data.error}</div>`;
+            return;
+          }
+          renderPokemonDetailsFromApi(name, data);
+        })
+        .catch(err => {
+          pokemonDetails.innerHTML = `<div class='alert alert-danger'>Failed to load details.</div>`;
+        });
+    }
+
+    function renderPokemonDetailsFromApi(name, data) {
+      // Clear previous details
+      pokemonDetails.innerHTML = '';
+      // Create main structure with tabs
+      const html = `
+        <h3>${name}</h3>
+        <ul class="nav nav-tabs" id="pokeTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="speed-tab" data-bs-toggle="tab" data-bs-target="#speed" type="button" role="tab">Speed</button>
+          </li>
+        </ul>
+        <div class="tab-content" id="pokeTabsContent">
+          <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <h5 class="mt-3">Items</h5>
+            <div id="items-grid"></div>
+            <h5 class="mt-3">Moves</h5>
+            <div id="moves-grid"></div>
+            <h5 class="mt-3">Abilities</h5>
+            <div id="abilities-grid"></div>
+            <h5 class="mt-3">Natures</h5>
+            <div id="natures-grid"></div>
+          </div>
+          <div class="tab-pane fade" id="speed" role="tabpanel">
+            <div id="speed-chart-container" class="mt-3"></div>
+          </div>
+        </div>
+      `;
+      pokemonDetails.innerHTML = html;
+      // Render grids
+      if (data.items && data.items.length > 0) {
+        new gridjs.Grid({
+          columns: ['Item', '%'],
+          data: data.items,
+          style: {
+            table: { 'font-size': '0.9rem' },
+            th: { 'text-align': 'left' },
+            td: { 'text-align': 'left' }
+          }
+        }).render(document.getElementById('items-grid'));
+      }
+      if (data.moves && data.moves.length > 0) {
+        new gridjs.Grid({
+          columns: ['Move', '%'],
+          data: data.moves,
+          style: {
+            table: { 'font-size': '0.9rem' },
+            th: { 'text-align': 'left' },
+            td: { 'text-align': 'left' }
+          }
+        }).render(document.getElementById('moves-grid'));
+      }
+      if (data.abilities && data.abilities.length > 0) {
+        new gridjs.Grid({
+          columns: ['Ability', '%'],
+          data: data.abilities,
+          style: {
+            table: { 'font-size': '0.9rem' },
+            th: { 'text-align': 'left' },
+            td: { 'text-align': 'left' }
+          }
+        }).render(document.getElementById('abilities-grid'));
+      }
+      if (data.natures && data.natures.length > 0) {
+        new gridjs.Grid({
+          columns: ['Nature', 'Usage %', 'Common Spreads'],
+          data: data.natures.map(([nature, pct, spreads]) => [nature, pct, gridjs.html(spreads)]),
+           style: {
+            table: { 'font-size': '0.9rem' },
+            th: { 'text-align': 'left' },
+            td: { 'text-align': 'left' }
+          }
+        }).render(document.getElementById('natures-grid'));
+      }
+      // Speed tab content
+      if (data.speed_distribution && data.speed_distribution.length > 0) {
+        document.getElementById('speed-chart-container').innerHTML = '<h5>Speed Distribution</h5><canvas id="speedChart" height="80"></canvas>';
+        setTimeout(() => {
+          renderSpeedChartFromApi(data.speed_distribution);
+        }, 100); // Timeout to allow tab to become visible
+      }
+    }
+
+    function renderSpeedChartFromApi(speed_distribution) {
+      if (speedChart) speedChart.destroy();
+      const ctx = document.getElementById('speedChart').getContext('2d');
+      const labels = speed_distribution.map(([spd, _]) => spd);
+      const dataArr = speed_distribution.map(([_, pct]) => parseFloat(pct));
+      speedChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Usage %',
+            data: dataArr,
+            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Speed Distribution'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Usage %' }
+            },
+            x: {
+              title: { display: true, text: 'Speed' }
+            }
+          }
+        }
       });
     }
 
@@ -266,99 +411,6 @@
           li.style.display = 'none';
         }
       });
-    }
-
-    function renderPokemonDetails(name, data) {
-      if (!data) return;
-      let html = `<h3>${name}</h3>`;
-      const total = data["Raw count"] || 1;
-      // Items
-      if (data.Items) {
-        html += '<h5>Items</h5>';
-        html += '<table class="table table-sm table-striped"><thead><tr><th>Item</th><th>%</th></tr></thead><tbody>';
-        const items = Object.entries(data.Items).sort((a, b) => b[1] - a[1]);
-        const totalItems = Object.values(data.Items).reduce((a, b) => a + b, 0) || 1;
-        items.slice(0, 10).forEach(([item, count]) => {
-          const pct = ((count / totalItems) * 100).toFixed(2);
-          html += `<tr><td>${item}</td><td>${pct}%</td></tr>`;
-        });
-        html += '</tbody></table>';
-      }
-      // Moves
-      if (data.Moves) {
-        html += '<h5>Moves</h5>';
-        html += '<table class="table table-sm table-striped"><thead><tr><th>Move</th><th>%</th></tr></thead><tbody>';
-        const moves = Object.entries(data.Moves).sort((a, b) => b[1] - a[1]);
-        const totalMoves = (Object.values(data.Moves).reduce((a, b) => a + b, 0) || 1) / 4;
-        moves.slice(0, 10).forEach(([move, count]) => {
-          const pct = ((count / totalMoves) * 100).toFixed(2);
-          html += `<tr><td>${move}</td><td>${pct}%</td></tr>`;
-        });
-        html += '</tbody></table>';
-      }
-      // Abilities
-      if (data.Abilities) {
-        html += '<h5>Abilities</h5>';
-        html += '<table class="table table-sm table-striped"><thead><tr><th>Ability</th><th>%</th></tr></thead><tbody>';
-        const abilities = Object.entries(data.Abilities).sort((a, b) => b[1] - a[1]);
-        const totalAbilities = Object.values(data.Abilities).reduce((a, b) => a + b, 0) || 1;
-        abilities.forEach(([ability, count]) => {
-          const pct = ((count / totalAbilities) * 100).toFixed(2);
-          html += `<tr><td>${ability}</td><td>${pct}%</td></tr>`;
-        });
-        html += '</tbody></table>';
-      }
-      // Natures Table
-      if (data.Spreads) {
-        // Aggregate by nature
-        const natureTotals = {};
-        const natureItems = {};
-        const natureSpreads = {};
-        Object.entries(data.Spreads).forEach(([spread, count]) => {
-          const parts = spread.split(":");
-          const nature = parts[0];
-          natureTotals[nature] = (natureTotals[nature] || 0) + count;
-          // Track spreads for this nature
-          if (!natureSpreads[nature]) natureSpreads[nature] = {};
-          natureSpreads[nature][spread] = (natureSpreads[nature][spread] || 0) + count;
-        });
-        // Aggregate items by nature
-        if (data.ItemsByNature) {
-          Object.entries(data.ItemsByNature).forEach(([nature, items]) => {
-            natureItems[nature] = items;
-          });
-        } else {
-          // Fallback: estimate items by nature using spreads and items
-          Object.entries(data.Spreads).forEach(([spread, count]) => {
-            const parts = spread.split(":");
-            const nature = parts[0];
-            // We cant directly map items to natures without more granular data
-          });
-        }
-        html += '<h5>Natures</h5>';
-        html += '<table class="table table-sm table-striped"><thead><tr><th>Nature</th><th>Usage %</th><th>Common Spreads</th></tr></thead><tbody>';
-        const totalSpreads = Object.values(data.Spreads).reduce((a, b) => a + b, 0);
-        Object.entries(natureTotals).sort((a, b) => b[1] - a[1]).forEach(([nature, count]) => {
-          const pct = ((count / totalSpreads) * 100).toFixed(2);
-          if (isNaN(pct) || Number(pct) === 0) return;
-          // Common spreads for this nature
-          const spreadsForNature = Object.entries(natureSpreads[nature] || {}).sort((a, b) => b[1] - a[1]);
-          const commonSpreads = spreadsForNature.slice(0, 5).map(([spread, spreadCount]) => {
-            const evs = spread.split(":")[1];
-            const spreadPct = ((spreadCount / count) * 100).toFixed(2);
-            if (isNaN(spreadPct) || Number(spreadPct) === 0) return null;
-            return `${evs} (${spreadPct}%)`;
-          }).filter(Boolean).join('<br>');
-          html += `<tr><td>${nature}</td><td>${pct}%</td><td>${commonSpreads}</td></tr>`;
-        });
-        html += '</tbody></table>';
-      }
-      // Speed Chart
-      if (data.Spreads) {
-        html += '<h5>Speed Distribution</h5><canvas id="speedChart" height="80"></canvas>';
-        setTimeout(() => renderSpeedChart(data.Spreads, name), 0);
-      }
-      pokemonDetails.innerHTML = html;
     }
 
     function normalizeName(name) {
