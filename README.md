@@ -12,4 +12,4 @@ Planned implementations: Tera Types, Filtering usages/spreads by nature, partner
 4. Start the app server with 'rails server'
 5. The site should be accessible via localhost:3000
 
-No DB is required. The data from smogon is streamed directly via json and cahced in memory.
+No DB is required. The data from smogon is streamed directly via json and cached in memory.
