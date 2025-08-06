@@ -9,6 +9,23 @@
  * Consider organizing styles into separate files for maintainability.
  */
 
+/* Pokemon VGC Stats Custom Styles */
+.pokemon-hide {
+  display: none !important;
+}
+
+.pokemon-name {
+  font-weight: 500;
+}
+
+.list-group-item {
+  cursor: pointer;
+}
+
+.list-group-item:hover {
+  background-color: #f8f9fa;
+}
+
 .pokemon-hide {
   display: none !important;
 }
