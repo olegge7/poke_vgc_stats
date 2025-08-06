@@ -8,8 +8,8 @@ class PokemonStatsCalculationService
     return UsageChartsViewModel.new unless @view_model.pokemon_data.any?
 
     pokemon_entries = @view_model.pokemon_data
-                                 .select { |_, data| data['usage'] }
-                                 .map { |name, data| { name: name, usage: data['usage'] } }
+                                 .select { |_, data| data["usage"] }
+                                 .map { |name, data| { name: name, usage: data["usage"] } }
 
     regular_pokemon = pokemon_entries.reject { |entry| @view_model.restricted_pokemon_names.include?(entry[:name]) }
     restricted_pokemon = pokemon_entries.select { |entry| @view_model.restricted_pokemon_names.include?(entry[:name]) }
@@ -41,8 +41,8 @@ class PokemonStatsCalculationService
       name: pokemon_name,
       month: @view_model.month,
       format: @view_model.format,
-      usage_percentage: poke_data['usage'] ? (poke_data['usage'] * 100).round(2) : 0,
-      raw_count: poke_data['Raw count'] || 0,
+      usage_percentage: poke_data["usage"] ? (poke_data["usage"] * 100).round(2) : 0,
+      raw_count: poke_data["Raw count"] || 0,
       base_stats: base_stats
     )
 
@@ -81,13 +81,13 @@ class PokemonStatsCalculationService
     total_teams = 0
 
     @view_model.pokemon_data.each do |pokemon_name, poke_data|
-      next unless poke_data['Teammates']
+      next unless poke_data["Teammates"]
       next unless @view_model.restricted_pokemon_names.include?(pokemon_name)
 
-      poke_data['Teammates'].each do |teammate, count|
+      poke_data["Teammates"].each do |teammate, count|
         next unless @view_model.restricted_pokemon_names.include?(teammate)
 
-        pair = [pokemon_name, teammate].sort.join(' + ')
+        pair = [ pokemon_name, teammate ].sort.join(" + ")
         pair_counts[pair] += count
         total_teams += count
       end
@@ -106,66 +106,66 @@ class PokemonStatsCalculationService
   end
 
   def calculate_items(poke_data)
-    return [] unless poke_data['Items']
+    return [] unless poke_data["Items"]
 
-    total_items = poke_data['Items'].values.sum
+    total_items = poke_data["Items"].values.sum
     return [] if total_items == 0
 
-    poke_data['Items'].sort_by { |_, count| -count }
+    poke_data["Items"].sort_by { |_, count| -count }
              .first(10)
              .map do |item, count|
                pct = ((count.to_f / total_items) * 100).round(2)
                next if pct == 0
-               [item, "#{pct}%"]
+               [ item, "#{pct}%" ]
              end
              .compact
   end
 
   def calculate_moves(poke_data)
-    return [] unless poke_data['Moves']
+    return [] unless poke_data["Moves"]
 
-    total_moves = poke_data['Moves'].values.sum
+    total_moves = poke_data["Moves"].values.sum
     return [] if total_moves == 0
 
-    poke_data['Moves'].sort_by { |_, count| -count }
+    poke_data["Moves"].sort_by { |_, count| -count }
              .first(10)
              .map do |move, count|
                pct = ((count.to_f / total_moves) * 400).round(2)
                next if pct == 0
-               [move, "#{pct}%"]
+               [ move, "#{pct}%" ]
              end
              .compact
   end
 
   def calculate_abilities(poke_data)
-    return [] unless poke_data['Abilities']
+    return [] unless poke_data["Abilities"]
 
-    total_abilities = poke_data['Abilities'].values.sum
+    total_abilities = poke_data["Abilities"].values.sum
     return [] if total_abilities == 0
 
-    poke_data['Abilities'].sort_by { |_, count| -count }
+    poke_data["Abilities"].sort_by { |_, count| -count }
              .map do |ability, count|
                pct = ((count.to_f / total_abilities) * 100).round(2)
                next if pct == 0
-               [ability, "#{pct}%"]
+               [ ability, "#{pct}%" ]
              end
              .compact
   end
 
   def calculate_natures(poke_data)
-    return [] unless poke_data['Spreads']
+    return [] unless poke_data["Spreads"]
 
     nature_totals = Hash.new(0)
     nature_spreads = Hash.new { |h, k| h[k] = Hash.new(0) }
 
-    poke_data['Spreads'].each do |spread, count|
-      parts = spread.split(':')
+    poke_data["Spreads"].each do |spread, count|
+      parts = spread.split(":")
       nature = parts[0]
       nature_totals[nature] += count
       nature_spreads[nature][spread] += count
     end
 
-    total_spreads = poke_data['Spreads'].values.sum
+    total_spreads = poke_data["Spreads"].values.sum
     return [] if total_spreads == 0
 
     nature_totals.sort_by { |_, count| -count }
@@ -176,50 +176,50 @@ class PokemonStatsCalculationService
                    spreads_for_nature = nature_spreads[nature].sort_by { |_, spread_count| -spread_count }
                    common_spreads = spreads_for_nature.first(5)
                                                      .map do |spread, spread_count|
-                                                       evs = spread.split(':')[1]
+                                                       evs = spread.split(":")[1]
                                                        spread_pct = ((spread_count.to_f / count) * 100).round(2)
                                                        next if spread_pct == 0
                                                        "#{evs} (#{spread_pct}%)"
                                                      end
                                                      .compact
-                                                     .join('<br>')
+                                                     .join("<br>")
 
-                   [nature, "#{pct}%", common_spreads]
+                   [ nature, "#{pct}%", common_spreads ]
                  end
                  .compact
   end
 
   def calculate_speed_distribution(poke_data, base_stats)
-    calculate_stat_distribution(poke_data, base_stats, 'spe', 5)
+    calculate_stat_distribution(poke_data, base_stats, "spe", 5)
   end
 
   def calculate_attack_distribution(poke_data, base_stats)
-    calculate_stat_distribution(poke_data, base_stats, 'atk', 1)
+    calculate_stat_distribution(poke_data, base_stats, "atk", 1)
   end
 
   def calculate_defense_distribution(poke_data, base_stats)
-    calculate_stat_distribution(poke_data, base_stats, 'def', 2)
+    calculate_stat_distribution(poke_data, base_stats, "def", 2)
   end
 
   def calculate_sp_atk_distribution(poke_data, base_stats)
-    calculate_stat_distribution(poke_data, base_stats, 'spa', 3)
+    calculate_stat_distribution(poke_data, base_stats, "spa", 3)
   end
 
   def calculate_sp_def_distribution(poke_data, base_stats)
-    calculate_stat_distribution(poke_data, base_stats, 'spd', 4)
+    calculate_stat_distribution(poke_data, base_stats, "spd", 4)
   end
 
   def calculate_hp_distribution(poke_data, base_stats)
-    return [] unless base_stats['hp'] && poke_data['Spreads']
+    return [] unless base_stats["hp"] && poke_data["Spreads"]
 
-    base_hp = base_stats['hp']
+    base_hp = base_stats["hp"]
     hp_counts = Hash.new(0)
 
-    poke_data['Spreads'].each do |spread, count|
-      parts = spread.split(':')
+    poke_data["Spreads"].each do |spread, count|
+      parts = spread.split(":")
       next unless parts.length == 2
 
-      stats = parts[1].split('/').map(&:to_i)
+      stats = parts[1].split("/").map(&:to_i)
       hp_ev = stats[0]
       iv = 31
 
@@ -231,22 +231,22 @@ class PokemonStatsCalculationService
   end
 
   def calculate_stat_distribution(poke_data, base_stats, stat_key, ev_index)
-    return [] unless base_stats[stat_key] && poke_data['Spreads']
+    return [] unless base_stats[stat_key] && poke_data["Spreads"]
 
     base_stat = base_stats[stat_key]
     stat_counts = Hash.new(0)
 
     nature_modifiers = get_nature_modifiers(stat_key)
 
-    poke_data['Spreads'].each do |spread, count|
-      parts = spread.split(':')
+    poke_data["Spreads"].each do |spread, count|
+      parts = spread.split(":")
       next unless parts.length == 2
 
       nature = parts[0]
-      stats = parts[1].split('/').map(&:to_i)
+      stats = parts[1].split("/").map(&:to_i)
       stat_ev = stats[ev_index]
 
-      nature_multiplier = nature_modifiers[:up].include?(nature) ? 1.1 : 
+      nature_multiplier = nature_modifiers[:up].include?(nature) ? 1.1 :
                          nature_modifiers[:down].include?(nature) ? 0.9 : 1.0
 
       iv = 31
@@ -266,21 +266,21 @@ class PokemonStatsCalculationService
     stat_counts.keys.sort.map do |stat_value|
       pct = ((stat_counts[stat_value].to_f / total) * 100).round(2)
       next if pct == 0
-      [stat_value.to_s, "#{pct}%"]
+      [ stat_value.to_s, "#{pct}%" ]
     end.compact
   end
 
   def get_nature_modifiers(stat_key)
     case stat_key
-    when 'spe'
+    when "spe"
       { up: %w[Timid Hasty Jolly Naive], down: %w[Brave Relaxed Quiet Sassy] }
-    when 'atk'
+    when "atk"
       { up: %w[Lonely Adamant Naughty Brave], down: %w[Bold Modest Calm Timid] }
-    when 'def'
+    when "def"
       { up: %w[Bold Impish Lax Relaxed], down: %w[Lonely Mild Gentle Hasty] }
-    when 'spa'
+    when "spa"
       { up: %w[Modest Mild Rash Quiet], down: %w[Adamant Impish Careful Jolly] }
-    when 'spd'
+    when "spd"
       { up: %w[Calm Gentle Careful Sassy], down: %w[Naughty Lax Rash Naive] }
     else
       { up: [], down: [] }
@@ -290,18 +290,18 @@ class PokemonStatsCalculationService
   def get_base_stats(pokemon_name)
     return {} unless @pokedex
 
-    stats = @pokedex[pokemon_name]&.dig('baseStats') ||
-            @pokedex[normalize_name(pokemon_name)]&.dig('baseStats')
-    
+    stats = @pokedex[pokemon_name]&.dig("baseStats") ||
+            @pokedex[normalize_name(pokemon_name)]&.dig("baseStats")
+
     stats || {}
   end
 
   def normalize_name(name)
-    name.downcase.gsub(/[^a-z0-9]/, '')
+    name.downcase.gsub(/[^a-z0-9]/, "")
   end
 
   def load_pokedex
-    pokedex_path = Rails.root.join('public', 'pokedex.json')
+    pokedex_path = Rails.root.join("public", "pokedex.json")
     JSON.parse(File.read(pokedex_path))
   rescue => e
     Rails.logger.warn "Could not load Pokedex: #{e.message}"

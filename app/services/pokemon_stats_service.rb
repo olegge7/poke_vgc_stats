@@ -5,7 +5,7 @@ class PokemonStatsService
 
   def fetch_and_calculate_stats(month, format)
     view_model = PokemonStatsViewModel.new(month: month, format: format)
-    
+
     # Try to get from cache first
     cached_data = Rails.cache.read(view_model.cache_key)
     if cached_data
@@ -17,16 +17,16 @@ class PokemonStatsService
 
     # Fetch raw data from Smogon
     raw_data = SmogonDataService.fetch_chaos_data(month, format)
-    return view_model if raw_data.empty? || !raw_data['data']
+    return view_model if raw_data.empty? || !raw_data["data"]
 
     # Process and store the data
-    view_model.pokemon_data = raw_data['data']
-    
+    view_model.pokemon_data = raw_data["data"]
+
     # Calculate derived data
     calculation_service = PokemonStatsCalculationService.new(view_model)
     charts_data = calculation_service.calculate_usage_charts
     view_model.usage_charts_data = charts_data.chart_data
-    
+
     # Generate pokemon list
     view_model.pokemon_list = generate_pokemon_list(view_model)
 
@@ -67,11 +67,11 @@ class PokemonStatsService
   end
 
   def fetch_months
-    cached_months = Rails.cache.read('pokemon_months')
+    cached_months = Rails.cache.read("pokemon_months")
     return cached_months if cached_months
 
     months = SmogonDataService.fetch_months
-    Rails.cache.write('pokemon_months', months, expires_in: 6.hours)
+    Rails.cache.write("pokemon_months", months, expires_in: 6.hours)
     months
   end
 
@@ -89,12 +89,12 @@ class PokemonStatsService
 
   def generate_pokemon_list(view_model)
     view_model.pokemon_data
-              .select { |_, data| data['usage'] }
-              .sort_by { |_, data| -data['usage'] }
+              .select { |_, data| data["usage"] }
+              .sort_by { |_, data| -data["usage"] }
               .map do |name, data|
                 {
                   name: name,
-                  usage_percentage: (data['usage'] * 100).round(2),
+                  usage_percentage: (data["usage"] * 100).round(2),
                   is_restricted: view_model.restricted_pokemon_names.include?(name)
                 }
               end

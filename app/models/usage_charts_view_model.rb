@@ -5,7 +5,7 @@ class UsageChartsViewModel
   attribute :top_regular_pokemon, default: []
   attribute :top_restricted_pokemon, default: []
   attribute :restricted_pairs, default: []
-  
+
   def initialize(attributes = {})
     super
   end

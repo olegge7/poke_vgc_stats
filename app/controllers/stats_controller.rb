@@ -16,7 +16,7 @@ class StatsController < ApplicationController
       render json: []
       return
     end
-    
+
     formats = @pokemon_stats_service.fetch_formats(month)
     render json: formats
   end
@@ -24,17 +24,17 @@ class StatsController < ApplicationController
   def data
     month = params[:month]
     format = params[:format]
-    
+
     if month.blank? || format.blank?
-      render json: { error: 'Missing month or format' }, status: 400
+      render json: { error: "Missing month or format" }, status: 400
       return
     end
 
     begin
       view_model = @pokemon_stats_service.fetch_and_calculate_stats(month, format)
-      
+
       if view_model.empty?
-        render json: { error: 'No data found for the specified month and format' }, status: 404
+        render json: { error: "No data found for the specified month and format" }, status: 404
         return
       end
 
@@ -47,7 +47,7 @@ class StatsController < ApplicationController
       render json: response_data
     rescue => e
       Rails.logger.error "Error fetching data: #{e.message}"
-      render json: { error: 'Failed to fetch data' }, status: 500
+      render json: { error: "Failed to fetch data" }, status: 500
     end
   end
 
@@ -55,17 +55,17 @@ class StatsController < ApplicationController
     month = params[:month]
     format = params[:format]
     name = params[:name]
-    
+
     if month.blank? || format.blank? || name.blank?
-      render json: { error: 'Missing month, format, or name' }, status: 400
+      render json: { error: "Missing month, format, or name" }, status: 400
       return
     end
 
     begin
       details = @pokemon_stats_service.fetch_pokemon_details(month, format, name)
-      
+
       if details.nil?
-        render json: { error: 'Pokémon not found in data' }, status: 404
+        render json: { error: "Pokémon not found in data" }, status: 404
         return
       end
 
@@ -83,7 +83,7 @@ class StatsController < ApplicationController
       }
     rescue => e
       Rails.logger.error "Error fetching Pokemon details: #{e.message}"
-      render json: { error: 'Failed to fetch Pokemon details' }, status: 500
+      render json: { error: "Failed to fetch Pokemon details" }, status: 500
     end
   end
 

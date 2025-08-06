@@ -8,7 +8,7 @@ class PokemonStatsViewModel
   attribute :usage_charts_data, default: {}
   attribute :pokemon_list, default: []
   attribute :restricted_pokemon, default: []
-  
+
   validates :month, presence: true
   validates :format, presence: true
 
@@ -26,8 +26,8 @@ class PokemonStatsViewModel
   end
 
   def pokemon_names
-    pokemon_data.keys.select { |name| pokemon_data[name]['usage'] }
-                   .sort_by { |name| -pokemon_data[name]['usage'] }
+    pokemon_data.keys.select { |name| pokemon_data[name]["usage"] }
+                   .sort_by { |name| -pokemon_data[name]["usage"] }
   end
 
   def restricted_pokemon_names
@@ -46,7 +46,7 @@ class PokemonStatsViewModel
 
   def load_restricted_pokemon
     begin
-      restricted_path = Rails.root.join('public', 'restricted_pokemon.json')
+      restricted_path = Rails.root.join("public", "restricted_pokemon.json")
       self.restricted_pokemon = JSON.parse(File.read(restricted_path))
     rescue => e
       Rails.logger.warn "Could not load restricted Pokemon: #{e.message}"
