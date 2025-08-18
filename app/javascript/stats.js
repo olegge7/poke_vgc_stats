@@ -50,11 +50,10 @@ $(function() {
     fetchAndRenderData();
   });
 
-  if ($pokemonSearch.length) {
-    $pokemonSearch.on('input', function() {
-      filterPokemonList($(this).val());
-    });
-  }
+  // Use event delegation to ensure the search works even when the element is initially hidden
+  $(document).on('input', '#pokemonSearch', function() {
+    filterPokemonList($(this).val());
+  });
 
   // Chart collapse event handlers
   if ($usageChartsCollapse.length && $chevronIcon.length) {
@@ -735,7 +734,8 @@ $(function() {
 
   function filterPokemonList(query) {
     const filter = query.trim().toLowerCase();
-    $pokemonList.children().each(function() {
+    const $pokemonListCurrent = $('#pokemonList'); // Get a fresh reference
+    $pokemonListCurrent.children().each(function() {
       const $nameSpan = $(this).children('.pokemon-name');
       const nameText = $nameSpan.text().trim().toLowerCase();
       if (nameText.includes(filter)) {
